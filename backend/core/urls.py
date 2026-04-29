@@ -16,7 +16,25 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+from django.apps import apps
+from django.contrib import admin
+
+MY_APPS = ['users', 'stores', 'products', 'orders', 'categories', 'cart', 'ai_chat']
+
+for app_label in MY_APPS:
+    app_config = apps.get_app_config(app_label)
+    for model in app_config.get_models():
+        try:
+            admin.site.register(model)
+        except admin.sites.AlreadyRegistered:
+            pass
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/', include('api.products.urls')),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
