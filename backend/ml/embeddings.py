@@ -19,7 +19,7 @@ def _get_model():
 
 def get_embedding(text: str) -> list[float]:
     """
-    Превращает текст в вектор из 768 чисел.
+    Превращает текст в вектор из 1024 чисел.
     """
     tokenizer, model = _get_model()
 
