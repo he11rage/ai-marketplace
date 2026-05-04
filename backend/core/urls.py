@@ -14,14 +14,18 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.apps import apps
 from django.contrib import admin
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework.reverse import reverse
 
-MY_APPS = ['users', 'stores', 'products', 'orders', 'categories', 'cart', 'ai_chat']
+MY_APPS = ["users", "stores", "products", "orders", "categories", "cart", "ai_chat"]
 
 for app_label in MY_APPS:
     app_config = apps.get_app_config(app_label)
@@ -31,9 +35,26 @@ for app_label in MY_APPS:
         except admin.sites.AlreadyRegistered:
             pass
 
+
+@api_view(["GET"])
+def api_root(request, format=None):
+    return Response(
+        {
+            "products": reverse("product-list", request=request, format=format),
+            "stores": reverse("store-list", request=request, format=format),
+            "cart": reverse("cart-item-list", request=request, format=format),
+        }
+    )
+
+
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('api/', include('api.products.urls')),
+    path("admin/", admin.site.urls),
+    path("api/", api_root),
+    path("api/products/", include("api.products.urls")),
+    path("api/stores/", include("api.stores.urls")),
+    path("api/cart/", include("api.cart.urls")),
+    path("auth/", include("djoser.urls")),
+    path("auth/", include("djoser.urls.jwt")),
 ]
 
 if settings.DEBUG:
