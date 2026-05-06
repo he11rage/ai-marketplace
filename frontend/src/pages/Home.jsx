@@ -1,6 +1,8 @@
 import '../Home.css';
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import Product from '../components/Product';
 
 const PRODUCTS_API_URL = '/api/products/';
 
@@ -18,6 +20,7 @@ const formatPrice = (value) => {
 };
 
 const Home = () => {
+	const navigate = useNavigate();
 	const [products, setProducts] = useState([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState('');
@@ -73,7 +76,11 @@ const Home = () => {
 					<button type="button" className="home-header__icon">
 						Корз
 					</button>
-					<button type="button" className="home-header__icon">
+					<button
+						type="button"
+						className="home-header__icon"
+						onClick={() => navigate('/login')}
+					>
 						Проф
 					</button>
 				</div>
@@ -97,18 +104,7 @@ const Home = () => {
 				<ul className="home-products-grid">
 					{products.map((product) => (
 						<li key={product.id}>
-							<article className="home-product-card">
-								<div className="home-product__image">Фото товара</div>
-								<p className="home-product__brand">
-									{product.brand || product.name || 'Без названия'}
-								</p>
-								<p className="home-product__price">
-									{formatPrice(product.price)}
-								</p>
-								<button type="button" className="home-product__button">
-									В корзину
-								</button>
-							</article>
+							<Product product={product} formatPrice={formatPrice} />
 						</li>
 					))}
 				</ul>
