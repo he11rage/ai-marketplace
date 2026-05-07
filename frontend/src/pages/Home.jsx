@@ -5,6 +5,7 @@ import axios from 'axios';
 import Product from '../components/Product';
 
 const PRODUCTS_API_URL = '/api/products/';
+const CART_API_URL = '/api/cart/';
 
 const formatPrice = (value) => {
 	if (value === null || value === undefined) {
@@ -24,11 +25,13 @@ const Home = () => {
 	const [products, setProducts] = useState([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState('');
+	const [cartMessage, setCartMessage] = useState('');
+	const [addingProductId, setAddingProductId] = useState(null);
 
 	useEffect(() => {
 		const controller = new AbortController();
 
-		const loadProducts = async () => {
+		const loadProducts = async (retryWithoutAuth = true) => {
 			try {
 				const response = await axios.get(PRODUCTS_API_URL, {
 					signal: controller.signal,
@@ -38,6 +41,15 @@ const Home = () => {
 				setError('');
 			} catch (err) {
 				if (axios.isCancel(err) || err.code === 'ERR_CANCELED') {
+					return;
+				}
+
+				if (err?.response?.status === 401 && retryWithoutAuth) {
+					localStorage.removeItem('accessToken');
+					localStorage.removeItem('refreshToken');
+					localStorage.removeItem('currentUser');
+					delete axios.defaults.headers.common.Authorization;
+					await loadProducts(false);
 					return;
 				}
 
@@ -52,6 +64,51 @@ const Home = () => {
 
 		return () => controller.abort();
 	}, []);
+
+	const handleAddToCart = async (product) => {
+		const token = localStorage.getItem('accessToken');
+		if (!token) {
+			navigate('/login');
+			return;
+		}
+
+		setCartMessage('');
+		setAddingProductId(product.id);
+
+		try {
+			const cartResponse = await axios.get(CART_API_URL);
+			const cartItems = Array.isArray(cartResponse.data) ? cartResponse.data : [];
+			const existingCartItem = cartItems.find(
+				(item) => Number(item.product) === Number(product.id)
+			);
+
+			if (existingCartItem) {
+				const currentQuantity = Number(existingCartItem.quantity) || 0;
+				await axios.patch(`${CART_API_URL}${existingCartItem.id}/`, {
+					quantity: currentQuantity + 1,
+				});
+			} else {
+				await axios.post(CART_API_URL, {
+					product: product.id,
+					quantity: 1,
+				});
+			}
+			setCartMessage('Товар добавлен в корзину.');
+		} catch (err) {
+			console.error('Ошибка добавления товара в корзину:', err);
+			if (err?.response?.status === 401) {
+				localStorage.removeItem('accessToken');
+				localStorage.removeItem('refreshToken');
+				localStorage.removeItem('currentUser');
+				delete axios.defaults.headers.common.Authorization;
+				navigate('/login');
+				return;
+			}
+			setCartMessage('Не удалось добавить товар в корзину.');
+		} finally {
+			setAddingProductId(null);
+		}
+	};
 
 	return (
 		<main className="home-page">
@@ -73,7 +130,11 @@ const Home = () => {
 					<button type="button" className="home-header__icon">
 						Избр
 					</button>
-					<button type="button" className="home-header__icon">
+					<button
+						type="button"
+						className="home-header__icon"
+						onClick={() => navigate('/cart')}
+					>
 						Корз
 					</button>
 					<button
@@ -101,10 +162,20 @@ const Home = () => {
 			<section className="home-products-section">
 				{isLoading && <p>Загрузка товаров...</p>}
 				{error && <p>{error}</p>}
+				{cartMessage && <p>{cartMessage}</p>}
 				<ul className="home-products-grid">
 					{products.map((product) => (
 						<li key={product.id}>
-							<Product product={product} formatPrice={formatPrice} />
+							<Product
+								product={product}
+								formatPrice={formatPrice}
+								onAddToCart={handleAddToCart}
+								buttonLabel={
+									addingProductId === product.id
+										? 'Добавляем...'
+										: 'В корзину'
+								}
+							/>
 						</li>
 					))}
 				</ul>
