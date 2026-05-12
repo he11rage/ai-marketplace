@@ -10,6 +10,12 @@ class Order(models.Model):
         ('cancelled', 'Cancelled'),
     ]
 
+    PAYMENT_CHOICES = [
+        ('card', 'Bank Card'),
+        ('sbp', 'SBP'),
+        ('cash', 'Cash on Delivery'),
+    ]
+
     buyer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -17,6 +23,7 @@ class Order(models.Model):
     )
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='created')
+    payment_method = models.CharField(max_length=10, choices=PAYMENT_CHOICES, default='card')
     delivery_address = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

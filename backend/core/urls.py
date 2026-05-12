@@ -38,13 +38,14 @@ for app_label in MY_APPS:
 
 @api_view(["GET"])
 def api_root(request, format=None):
-    return Response(
-        {
-            "products": reverse("product-list", request=request, format=format),
-            "stores": reverse("store-list", request=request, format=format),
-            "cart": reverse("cart-item-list", request=request, format=format),
-        }
-    )
+    return Response({
+        "products": reverse("product-list", request=request, format=format),
+        "stores": reverse("store-list", request=request, format=format),
+        "category": reverse("category-list", request=request, format=format),
+        "cart": reverse("cart-item-list", request=request, format=format),
+        "orders": reverse("order-list", request=request, format=format),
+        "auth": request.build_absolute_uri("/auth/"), 
+    })
 
 
 urlpatterns = [
@@ -53,6 +54,8 @@ urlpatterns = [
     path("api/products/", include("api.products.urls")),
     path("api/stores/", include("api.stores.urls")),
     path("api/cart/", include("api.cart.urls")),
+    path("api/categories/", include("api.categories.urls")),
+    path('api/orders/', include('api.orders.urls')),
     path("auth/", include("djoser.urls")),
     path("auth/", include("djoser.urls.jwt")),
 ]

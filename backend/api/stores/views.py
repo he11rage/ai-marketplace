@@ -1,9 +1,13 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, permissions
 from .models import Store
 from .serializers import StoreSerializer
 
 class StoreViewSet(viewsets.ModelViewSet):
     queryset = Store.objects.all()
     serializer_class = StoreSerializer
-    # TODO: автоматически подставлять OWNER текущего юзера при создании
+
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
     

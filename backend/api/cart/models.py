@@ -31,6 +31,7 @@ class CartItem(models.Model):
         related_name='cart_items'
     )
     quantity = models.IntegerField(default=1)
+    selected = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
