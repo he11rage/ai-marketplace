@@ -1,5 +1,7 @@
 from django.db import models
 from django.conf import settings
+from pytils.translit import slugify
+
 
 class Store(models.Model):
     """Модель магазина"""
@@ -16,6 +18,12 @@ class Store(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+    
+    
     class Meta:
         db_table = 'stores'
         verbose_name = 'Store'

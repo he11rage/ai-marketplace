@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import viewsets, permissions, serializers
 from rest_framework.decorators import action
 from django.db import transaction
@@ -12,7 +13,6 @@ class OrderViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Юзер видит только свои заказы
         return Order.objects.filter(buyer=self.request.user).prefetch_related('items')
 
     @transaction.atomic
@@ -20,14 +20,21 @@ class OrderViewSet(viewsets.ModelViewSet):
         user = self.request.user
         cart = Cart.objects.get(user=user)
         
+        # Берем только выбранные товары
         cart_items = cart.items.filter(selected=True)
         
         if not cart_items.exists():
             raise serializers.ValidationError("Нет выбранных товаров для заказа")
 
-        order = serializer.save(buyer=user, status='created')
-        total_price = 0.0
+        
+        total_amount = Decimal('0')
+        for cart_item in cart_items:
+            total_amount += cart_item.product.price * cart_item.quantity
 
+        # Сохраняем заказ с уже посчитанной суммой
+        order = serializer.save(buyer=user, status='created', total_amount=total_amount)
+
+        # Списываем товары и создаем позиции заказа
         for cart_item in cart_items:
             product = cart_item.product
             
@@ -43,9 +50,6 @@ class OrderViewSet(viewsets.ModelViewSet):
                 quantity=cart_item.quantity,
                 price=product.price
             )
-            total_price += product.price * cart_item.quantity
 
-        order.total_price = total_price
-        order.save()
-        
+        # Очищаем корзину (только выбранные товары)
         cart_items.delete()

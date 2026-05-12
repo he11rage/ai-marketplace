@@ -37,7 +37,7 @@ class Product(models.Model):
         return self.name
 
     def save(self, *args, **kwargs):
-        if not self.embedding:
+        if self.embedding is None:
             text = f"{self.name} {self.description}"
             print(f"Generating embedding for: {self.name}")
             self.embedding = get_embedding(text)
