@@ -1,276 +1,116 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import axios from 'axios';
-import '../Cart.css';
+import { useNavigate } from 'react-router-dom';
+import { useCart } from '../hooks/useCart';
+import EmptyState from '../components/ui/EmptyState';
+import Button from '../components/ui/Button';
 
-const DELIVERY_PRICE = 490;
-const CART_API_URL = '/api/cart/';
-const PRODUCTS_API_URL = '/api/products/';
+export default function Cart() {
+    const navigate = useNavigate();
+    const { items, removeFromCart, updateQuantity, total } = useCart();
 
-const formatPrice = (value) => {
-	const numeric = Number(value);
-	if (Number.isNaN(numeric)) {
-		return '0 ₽';
-	}
-	return `${new Intl.NumberFormat('ru-RU').format(numeric)} ₽`;
-};
+    const handleProductClick = (productId) => {
+        navigate(`/product/${productId}`);
+    };
 
-const mapCartItems = (cartItems, productsMap) => {
-	const groupedItems = new Map();
+    if (items.length === 0) {
+        return (
+            <div className="max-w-[1440px] mx-auto px-6 py-12">
+                <EmptyState
+                    title="Ваша корзина пуста"
+                    description="Похоже, вы еще ничего не добавили. Посмотрите наши популярные товары!"
+                    icon="cart"
+                />
+            </div>
+        );
+    }
 
-	cartItems.forEach((item) => {
-		const productId = Number(item.product);
-		const quantity = Number(item.quantity) || 0;
+    const shipping = total > 100 ? 0 : 9;
+    const finalTotal = total + shipping;
 
-		if (groupedItems.has(productId)) {
-			const existingItem = groupedItems.get(productId);
-			existingItem.quantity += quantity;
-			existingItem.cartItemIds.push(item.id);
-			return;
-		}
+    return (
+        <div className="max-w-[1440px] mx-auto px-6 py-8">
+            <div className="flex items-center justify-between mb-6">
+                <h1 className="text-2xl font-bold">Корзина ({items.length} товара)</h1>
+            </div>
 
-		groupedItems.set(productId, {
-			...item,
-			product: productId,
-			quantity,
-			cartItemIds: [item.id],
-			productData: productsMap.get(productId) || null,
-		});
-	});
+            <div className="flex gap-8">
+                {/* Список товаров */}
+                <div className="flex-1 bg-white rounded-2xl shadow-subtle p-6 space-y-4">
+                    <div className="flex items-center gap-3 pb-3 border-b border-[#F2F2F7]">
+                        <input type="checkbox" checked readOnly className="w-5 h-5 rounded border-2 border-[#007AFF] text-[#007AFF]" />
+                        <label className="font-medium text-sm">Выбрать все</label>
+                    </div>
 
-	return Array.from(groupedItems.values());
-};
+                    {items.map(item => (
+                        <div
+                            key={item.id}
+                            className="flex items-center gap-4 p-4 bg-[#F5F5F7] rounded-xl cursor-pointer hover:bg-[#FAFAFA] transition group"
+                            onClick={() => handleProductClick(item.id)}
+                        >
+                            <input
+                                type="checkbox"
+                                checked
+                                readOnly
+                                className="w-5 h-5 rounded border-2 border-[#007AFF] text-[#007AFF]"
+                                onClick={(e) => e.stopPropagation()}
+                            />
 
-const Cart = () => {
-	const [items, setItems] = useState([]);
-	const [isLoading, setIsLoading] = useState(true);
-	const [isUpdatingItemId, setIsUpdatingItemId] = useState(null);
-	const [error, setError] = useState('');
+                            <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-[#f0f4ff] to-[#e8f0ff] flex-shrink-0 overflow-hidden">
+                                {item.image && (
+                                    <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                                )}
+                            </div>
 
-	useEffect(() => {
-		const controller = new AbortController();
+                            <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-sm mb-1 truncate group-hover:text-[#007AFF] transition">{item.name}</h3>
+                                <p className="text-xs text-text-secondary mb-3">{item.specs || 'SKU: ' + (item.sku || 'N/A')}</p>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, -1); }}
+                                        className="w-7 h-7 rounded-md bg-white flex items-center justify-center font-bold text-xs hover:bg-[#E5E5EA] transition"
+                                    >-</button>
+                                    <span className="font-medium text-sm w-6 text-center">{item.quantity}</span>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, 1); }}
+                                        className="w-7 h-7 rounded-md bg-white flex items-center justify-center font-bold text-xs hover:bg-[#E5E5EA] transition"
+                                    >+</button>
+                                </div>
+                            </div>
 
-		const loadCart = async () => {
-			const token = localStorage.getItem('accessToken');
-			if (!token) {
-				setError('Чтобы увидеть корзину, войдите в аккаунт.');
-				setItems([]);
-				setIsLoading(false);
-				return;
-			}
+                            <div className="text-right">
+                                <div className="font-bold text-[#007AFF] mb-1">${item.price * item.quantity}</div>
+                                {item.oldPrice && <span className="text-xs text-text-secondary line-through">${item.oldPrice}</span>}
+                            </div>
 
-			try {
-				const [cartResponse, productsResponse] = await Promise.all([
-					axios.get(CART_API_URL, { signal: controller.signal }),
-					axios.get(PRODUCTS_API_URL, { signal: controller.signal }),
-				]);
+                            <button
+                                onClick={(e) => { e.stopPropagation(); removeFromCart(item.id); }}
+                                className="w-9 h-9 rounded-lg flex items-center justify-center text-text-secondary hover:bg-[#F2F2F7] hover:text-[#FF3B30] transition"
+                                title="Удалить"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                </svg>
+                            </button>
+                        </div>
+                    ))}
+                </div>
 
-				const products = Array.isArray(productsResponse.data)
-					? productsResponse.data
-					: [];
-				const productsMap = new Map(products.map((product) => [product.id, product]));
-				const cartItems = Array.isArray(cartResponse.data) ? cartResponse.data : [];
-
-				const mappedItems = mapCartItems(cartItems, productsMap);
-
-				setItems(mappedItems);
-				setError('');
-			} catch (err) {
-				if (axios.isCancel(err) || err.code === 'ERR_CANCELED') {
-					return;
-				}
-
-				if (err?.response?.status === 401) {
-					setError('Сессия истекла. Войдите заново.');
-				} else {
-					setError('Не удалось загрузить корзину.');
-				}
-				setItems([]);
-			} finally {
-				setIsLoading(false);
-			}
-		};
-
-		loadCart();
-
-		return () => controller.abort();
-	}, []);
-
-	const updateQuantity = async (item, nextQuantity) => {
-		const safeQuantity = Math.max(1, nextQuantity);
-		setIsUpdatingItemId(item.id);
-		try {
-			const [primaryItemId, ...duplicateItemIds] = item.cartItemIds ?? [item.id];
-			const response = await axios.patch(`${CART_API_URL}${primaryItemId}/`, {
-				quantity: safeQuantity,
-			});
-			const updatedItem = response.data;
-
-			if (duplicateItemIds.length) {
-				await Promise.all(
-					duplicateItemIds.map((duplicateItemId) =>
-						axios.delete(`${CART_API_URL}${duplicateItemId}/`)
-					)
-				);
-			}
-
-			setItems((prevItems) =>
-				prevItems.map((item) =>
-					item.id === updatedItem.id
-						? { ...item, quantity: updatedItem.quantity, cartItemIds: [updatedItem.id] }
-						: item
-				)
-			);
-			setError('');
-		} catch {
-			setError('Не удалось обновить количество товара.');
-		} finally {
-			setIsUpdatingItemId(null);
-		}
-	};
-
-	const removeItem = async (item) => {
-		setIsUpdatingItemId(item.id);
-		try {
-			const itemIdsToDelete = item.cartItemIds ?? [item.id];
-			await Promise.all(
-				itemIdsToDelete.map((itemId) => axios.delete(`${CART_API_URL}${itemId}/`))
-			);
-			setItems((prevItems) => prevItems.filter((cartItem) => cartItem.id !== item.id));
-			setError('');
-		} catch {
-			setError('Не удалось удалить товар из корзины.');
-		} finally {
-			setIsUpdatingItemId(null);
-		}
-	};
-
-	const { subtotal, totalDiscount, total } = useMemo(() => {
-		const subtotalValue = items.reduce(
-			(sum, item) => sum + Number(item.productData?.price || 0) * item.quantity,
-			0
-		);
-		const discountValue = items.reduce((sum, item) => {
-			const currentPrice = Number(item.productData?.price || 0);
-			const oldPrice = Number(item.productData?.old_price || 0);
-			if (!oldPrice || oldPrice <= currentPrice) {
-				return sum;
-			}
-
-			return sum + (oldPrice - currentPrice) * item.quantity;
-		}, 0);
-
-		const delivery = items.length ? DELIVERY_PRICE : 0;
-
-		return {
-			subtotal: subtotalValue,
-			totalDiscount: discountValue,
-			total: subtotalValue + delivery,
-		};
-	}, [items]);
-
-	const totalItemsCount = items.reduce((sum, item) => sum + item.quantity, 0);
-
-	return (
-		<main className="cart-page">
-			<section className="cart-content">
-				<header className="cart-header">
-					<div className="cart-header__meta">
-						<h1>Корзина</h1>
-						<p>{items.length ? `${totalItemsCount} позиций` : 'Корзина пуста'}</p>
-					</div>
-					<Link to="/" className="cart-home-link">
-						На главную
-					</Link>
-				</header>
-				{isLoading && <p>Загрузка корзины...</p>}
-				{error && <p>{error}</p>}
-
-				{!isLoading && items.length === 0 ? (
-					<div className="cart-empty">
-						<h2>Пока ничего нет</h2>
-						<p>Добавьте товары из каталога, и они появятся здесь.</p>
-					</div>
-				) : (
-					<ul className="cart-list">
-						{items.map((item) => (
-							<li key={item.id} className="cart-item">
-								<div className="cart-item__image" aria-hidden="true">
-									{(item.productData?.name || `Товар ${item.product}`).split(' ')[0]}
-								</div>
-								<div className="cart-item__info">
-									<h3>{item.productData?.name || `Товар #${item.product}`}</h3>
-									<p>{item.productData?.description || 'Описание отсутствует'}</p>
-									<div className="cart-item__prices">
-										<strong>{formatPrice(item.productData?.price)}</strong>
-										{item.productData?.old_price && (
-											<span>{formatPrice(item.productData.old_price)}</span>
-										)}
-									</div>
-								</div>
-								<div className="cart-item__actions">
-									<div className="cart-quantity" aria-label="Количество товара">
-										<button
-											type="button"
-											disabled={isUpdatingItemId === item.id}
-											onClick={() =>
-												updateQuantity(item, item.quantity - 1)
-											}
-										>
-											-
-										</button>
-										<span>{item.quantity}</span>
-										<button
-											type="button"
-											disabled={isUpdatingItemId === item.id}
-											onClick={() =>
-												updateQuantity(item, item.quantity + 1)
-											}
-										>
-											+
-										</button>
-									</div>
-									<button
-										type="button"
-										className="cart-remove"
-										disabled={isUpdatingItemId === item.id}
-										onClick={() => removeItem(item)}
-									>
-										Удалить
-									</button>
-								</div>
-							</li>
-						))}
-					</ul>
-				)}
-			</section>
-
-			<aside className="cart-summary">
-				<h2>Ваш заказ</h2>
-				<div className="cart-summary__row">
-					<span>Товары</span>
-					<strong>{formatPrice(subtotal)}</strong>
-				</div>
-				<div className="cart-summary__row">
-					<span>Скидка</span>
-					<strong className="cart-summary__discount">
-						-{formatPrice(totalDiscount)}
-					</strong>
-				</div>
-				<div className="cart-summary__row">
-					<span>Доставка</span>
-					<strong>{items.length ? formatPrice(DELIVERY_PRICE) : '0 ₽'}</strong>
-				</div>
-				<div className="cart-summary__total">
-					<span>Итого</span>
-					<strong>{formatPrice(total)}</strong>
-				</div>
-				<button type="button" className="cart-summary__button" disabled={!items.length}>
-					Перейти к оформлению
-				</button>
-			</aside>
-		</main>
-	);
-};
-
-export default Cart;
+                {/* Итого */}
+                <div className="w-80 h-fit space-y-4">
+                    <div className="bg-white rounded-2xl shadow-subtle p-6 sticky top-24">
+                        <h3 className="font-bold mb-4">Итого</h3>
+                        <div className="space-y-2 text-sm mb-4">
+                            <div className="flex justify-between"><span className="text-text-secondary">Подитог</span><span className="font-medium">${total}</span></div>
+                            <div className="flex justify-between"><span className="text-text-secondary">Доставка</span><span className={shipping === 0 ? 'text-[#34C759] font-medium' : ''}>{shipping === 0 ? 'Бесплатно' : `$${shipping}`}</span></div>
+                        </div>
+                        <div className="border-t border-[#E5E5EA] pt-3 mb-4 flex justify-between">
+                            <span className="font-bold">Всего</span>
+                            <span className="font-bold text-xl text-[#007AFF]">${finalTotal}</span>
+                        </div>
+                        <Button className="w-full mb-3">Оформить заказ</Button>
+                        <p className="text-center text-xs text-text-secondary">Безопасная оплата через Stripe</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}

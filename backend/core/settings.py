@@ -173,7 +173,7 @@ DJOSER = {
     'ACTIVATION_URL': '#/activate/{uid}/{token}',
     'SERIALIZERS': {
         'user_create': 'api.users.serializers.CustomUserCreateSerializer',
-        'current_user': 'api.users.serializers.CustomUserCreateSerializer',
+        'current_user': 'api.users.serializers.CustomUserUpdateSerializer',
     },
 }
 

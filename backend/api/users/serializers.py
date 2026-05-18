@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from djoser.serializers import UserCreateSerializer
+from djoser.serializers import UserCreateSerializer, UserSerializer
 from django.contrib.auth import get_user_model
 
 
@@ -25,6 +25,20 @@ class CustomUserCreateSerializer(UserCreateSerializer):
         read_only_fields = ('id', 'is_admin')
         
     def create(self, validated_data):
-        print("!!! МОЙ СЕРИАЛИЗАТОР РАБОТАЕТ !!!") # Добавьте это
         user = User.objects.create_user(**validated_data)
         return user
+    
+class CustomUserUpdateSerializer(UserSerializer):
+    """Serializer for updating user profile"""
+    
+    class Meta:
+        model = User
+        fields = (
+            'id',
+            'username',
+            'email',
+            'first_name',
+            'last_name',
+            'phone',
+        )
+        read_only_fields = ('id', 'username')

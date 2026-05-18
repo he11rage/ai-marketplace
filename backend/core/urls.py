@@ -51,7 +51,7 @@ def api_root(request, format=None):
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", api_root),
-    path("api/products/", include("api.products.urls")),
+    path("api/", include("api.products.urls")),
     path("api/stores/", include("api.stores.urls")),
     path("api/cart/", include("api.cart.urls")),
     path("api/categories/", include("api.categories.urls")),
