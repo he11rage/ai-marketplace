@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiEndpoints } from '../api/axios';
 import ProductCard from '../components/ui/ProductCard';
@@ -7,11 +7,20 @@ import Button from '../components/ui/Button';
 
 export default function Catalog() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const searchQuery = searchParams.get('search')?.trim() || '';
   const [sort, setSort] = useState('relevance');
+  const orderingBySort = {
+    price_asc: 'price',
+    price_desc: '-price',
+  };
 
   const { data: products, isLoading } = useQuery({
-    queryKey: ['products'],
-    queryFn: () => apiEndpoints.getProducts().then(res => res.data),
+    queryKey: ['products', { sort, searchQuery }],
+    queryFn: () => apiEndpoints.getProducts({
+      search: searchQuery || undefined,
+      ordering: orderingBySort[sort],
+    }).then(res => res.data),
   });
 
   return (
@@ -69,7 +78,10 @@ export default function Catalog() {
         <main className="flex-1">
           {/* Top Bar */}
           <div className="flex items-center justify-between mb-6">
-            <span className="text-sm text-text-secondary">{products?.length || 0} товаров найдено</span>
+            <span className="text-sm text-text-secondary">
+              {products?.length || 0} товаров найдено
+              {searchQuery && ` по запросу "${searchQuery}"`}
+            </span>
             <select 
               value={sort} 
               onChange={(e) => setSort(e.target.value)}
@@ -84,6 +96,10 @@ export default function Catalog() {
           {/* Grid */}
           {isLoading ? (
             <div className="text-center py-20">Загрузка...</div>
+          ) : products?.length === 0 ? (
+            <div className="text-center py-20 text-text-secondary">
+              По вашему запросу ничего не найдено
+            </div>
           ) : (
             <div className="grid grid-cols-3 gap-6">
               {products?.map(product => (

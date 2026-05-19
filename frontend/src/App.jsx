@@ -26,6 +26,7 @@ function App() {
           <Route path="/account" element={<Account />} />
           <Route path="/catalog" element={<Catalog />} />
           <Route path="/create-product" element={<CreateProduct />} />
+          <Route path="/create-product/:id" element={<CreateProduct />} />
           <Route path="/wishlist" element={<Wishlist />} />
           <Route path="/chat" element={<AIChat />} />
           <Route path="/create-store" element={<CreateStore />} />

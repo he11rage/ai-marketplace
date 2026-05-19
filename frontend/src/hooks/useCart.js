@@ -1,52 +1,149 @@
-import { useState, useEffect } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiEndpoints } from '../api/axios';
 
 export function useCart() {
-  // Загружаем из localStorage при старте
-  const [items, setItems] = useState(() => {
-    try {
-      const stored = localStorage.getItem('cart');
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
+  const queryClient = useQueryClient();
+  const token = localStorage.getItem('access_token');
+
+  const normalizeCartItem = (item) => {
+    const product = item.product || {};
+
+    return {
+      ...product,
+      id: product.id,
+      cartItemId: item.id,
+      quantity: item.quantity,
+      selected: item.selected,
+      oldPrice: product.old_price,
+    };
+  };
+
+  const { data: items = [], isLoading } = useQuery({
+    queryKey: ['cart'],
+    queryFn: () => apiEndpoints.getCart().then(res => res.data.map(normalizeCartItem)),
+    enabled: !!token,
+    staleTime: 1000 * 60 * 5,
+    retry: false,
   });
 
-  // Сохраняем в localStorage при любом изменении
-  useEffect(() => {
-    localStorage.setItem('cart', JSON.stringify(items));
-  }, [items]);
+  const invalidateCart = () => {
+    queryClient.invalidateQueries({ queryKey: ['cart'] });
+  };
+
+  const addMutation = useMutation({
+    mutationFn: (product) => apiEndpoints.addToCart({
+      product_id: product.id,
+      quantity: product.quantity || 1,
+    }),
+    onSuccess: invalidateCart,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ cartItemId, quantity }) => (
+      apiEndpoints.updateCartItem(cartItemId, { quantity })
+    ),
+    onSuccess: invalidateCart,
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (cartItemId) => apiEndpoints.removeFromCart(cartItemId),
+    onSuccess: invalidateCart,
+  });
+
+  const updateSelectedMutation = useMutation({
+    mutationFn: ({ cartItemIds, selected }) => apiEndpoints.updateCartSelected({
+      item_ids: cartItemIds,
+      selected,
+    }),
+    onSuccess: invalidateCart,
+  });
+
+  const toggleAllMutation = useMutation({
+    mutationFn: (selectAll) => apiEndpoints.toggleAllCart({ select_all: selectAll }),
+    onSuccess: invalidateCart,
+  });
+
+  const checkoutMutation = useMutation({
+    mutationFn: (data) => apiEndpoints.createOrder(data),
+    onSuccess: () => {
+      invalidateCart();
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+  });
 
   const addToCart = (product) => {
-    setItems(prev => {
-      // Если товар уже есть, увеличиваем кол-во
-      const existing = prev.find(i => i.id === product.id);
-      if (existing) {
-        return prev.map(i => i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
+    if (!token) {
+      window.location.href = '/login';
+      return;
+    }
+
+    addMutation.mutate(product);
+  };
+
+  const removeFromCart = (productId) => {
+    const item = items.find(cartItem => cartItem.id === productId);
+    if (item?.cartItemId) {
+      removeMutation.mutate(item.cartItemId);
+    }
+  };
+
+  const updateQuantity = (productId, delta) => {
+    const item = items.find(cartItem => cartItem.id === productId);
+    if (!item?.cartItemId) return;
+
+    const quantity = Math.max(1, item.quantity + delta);
+    updateMutation.mutate({ cartItemId: item.cartItemId, quantity });
+  };
+
+  const updateSelected = (productId, selected) => {
+    const item = items.find(cartItem => cartItem.id === productId);
+    if (!item?.cartItemId) return;
+
+    updateSelectedMutation.mutate({ cartItemIds: [item.cartItemId], selected });
+  };
+
+  const toggleAll = (selectAll) => {
+    toggleAllMutation.mutate(selectAll);
+  };
+
+  const checkout = (data, options) => {
+    checkoutMutation.mutate(data, options);
+  };
+
+  const clearCart = () => {
+    items.forEach(item => {
+      if (item.cartItemId) {
+        removeMutation.mutate(item.cartItemId);
       }
-      // Иначе добавляем новый
-      return [...prev, { ...product, quantity: 1 }];
     });
   };
 
-  const removeFromCart = (id) => {
-    setItems(prev => prev.filter(item => item.id !== id));
-  };
-
-  const updateQuantity = (id, delta) => {
-    setItems(prev => prev.map(item => {
-      if (item.id === id) {
-        const newQty = Math.max(1, item.quantity + delta);
-        return { ...item, quantity: newQty };
-      }
-      return item;
-    }));
-  };
-
-  const clearCart = () => setItems([]);
-
-  // Подсчет общей суммы
-  const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const selectedItems = items.filter(item => item.selected);
+  const total = items.reduce((sum, item) => sum + (Number(item.price) * item.quantity), 0);
+  const selectedTotal = selectedItems.reduce((sum, item) => sum + (Number(item.price) * item.quantity), 0);
   const count = items.length;
+  const selectedCount = selectedItems.length;
+  const allSelected = items.length > 0 && selectedCount === items.length;
 
-  return { items, addToCart, removeFromCart, updateQuantity, clearCart, total, count };
+  return {
+    items,
+    addToCart,
+    removeFromCart,
+    updateQuantity,
+    updateSelected,
+    toggleAll,
+    checkout,
+    clearCart,
+    total,
+    selectedTotal,
+    count,
+    selectedCount,
+    allSelected,
+    isLoading,
+    isAdding: addMutation.isPending,
+    isUpdating: updateMutation.isPending,
+    isRemoving: removeMutation.isPending,
+    isSelectionUpdating: updateSelectedMutation.isPending || toggleAllMutation.isPending,
+    isCheckingOut: checkoutMutation.isPending,
+  };
 }

@@ -77,7 +77,7 @@ api.interceptors.response.use(
 // Экспортируем функции для взаимодействия с API
 export const apiEndpoints = {
     // Products
-    getProducts: () => api.get('/api/products/'),
+    getProducts: (params = {}) => api.get('/api/products/', { params }),
     getProduct: (id) => api.get(`/api/products/${id}/`),
     createProduct: (data) => api.post('/api/products/', data),  // FormData
     updateProduct: (id, data) => api.patch(`/api/products/${id}/`, data),  // FormData
@@ -99,6 +99,8 @@ export const apiEndpoints = {
     addToCart: (data) => api.post('/api/cart/', data),
     updateCartItem: (id, data) => api.patch(`/api/cart/${id}/`, data),
     removeFromCart: (id) => api.delete(`/api/cart/${id}/`),
+    updateCartSelected: (data) => api.post('/api/cart/update_selected/', data),
+    toggleAllCart: (data) => api.post('/api/cart/toggle_all/', data),
 
     // Orders
     getOrders: () => api.get('/api/orders/'),

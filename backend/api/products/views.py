@@ -1,6 +1,7 @@
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import PermissionDenied
+from django.db.models import Q
 from .models import Product, WishlistItem
 from .serializers import ProductSerializer, WishlistItemSerializer
 from rest_framework.response import Response
@@ -30,7 +31,22 @@ class ProductViewSet(viewsets.ModelViewSet):
         category_id = self.request.query_params.get('category')
         if category_id:
             queryset = queryset.filter(category_id=category_id)
-            
+
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(name__icontains=search) |
+                Q(description__icontains=search) |
+                Q(brand__icontains=search) |
+                Q(category__name__icontains=search) |
+                Q(store__name__icontains=search)
+            )
+
+        ordering = self.request.query_params.get('ordering')
+        allowed_ordering = {'price', '-price', 'created_at', '-created_at'}
+        if ordering in allowed_ordering:
+            queryset = queryset.order_by(ordering)
+
         return queryset
 
     def perform_create(self, serializer):

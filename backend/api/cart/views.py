@@ -19,6 +19,39 @@ class CartItemViewSet(viewsets.ModelViewSet):
         cart, _ = Cart.objects.get_or_create(user=self.request.user)
         serializer.save(cart=cart)
 
+    def create(self, request, *args, **kwargs):
+        cart, _ = Cart.objects.get_or_create(user=request.user)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        product = serializer.validated_data['product']
+        quantity = serializer.validated_data.get('quantity', 1)
+        selected = serializer.validated_data.get('selected', True)
+
+        existing_items = CartItem.objects.filter(cart=cart, product=product).order_by('id')
+        cart_item = existing_items.first()
+        created = cart_item is None
+
+        if created:
+            cart_item = CartItem.objects.create(
+                cart=cart,
+                product=product,
+                quantity=quantity,
+                selected=selected
+            )
+        else:
+            duplicate_quantity = sum(item.quantity for item in existing_items[1:])
+            existing_items.exclude(id=cart_item.id).delete()
+            cart_item.quantity += quantity + duplicate_quantity
+            cart_item.selected = selected
+            cart_item.save(update_fields=['quantity', 'selected'])
+
+        response_serializer = self.get_serializer(cart_item)
+        return Response(
+            response_serializer.data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        )
+
     @action(detail=False, methods=['post'])
     def update_selected(self, request):
         item_ids = request.data.get('item_ids', [])
