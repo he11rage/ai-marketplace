@@ -11,9 +11,9 @@ export default function CreateProduct() {
     const queryClient = useQueryClient();
     const isEditMode = !!id;
 
-    // 🔍 Отладка при монтировании
+    // Log mount context in development.
     useEffect(() => {
-        console.log('📝 CreateProduct mounted:', { id, isEditMode, url: window.location.href });
+        console.log('CreateProduct mounted:', { id, isEditMode, url: window.location.href });
     }, [id, isEditMode]);
 
     const [formData, setFormData] = useState({
@@ -36,26 +36,26 @@ export default function CreateProduct() {
     const [newCategoryName, setNewCategoryName] = useState('');
     const [isCreatingCategory, setIsCreatingCategory] = useState(false);
 
-    // Загрузка данных товара
+    // Load product data in edit mode.
     const { data: product, isLoading: loadingProduct, error: productError } = useQuery({
         queryKey: ['product', id],
         queryFn: async () => {
-            console.log('🔍 Fetching product:', id);
+            console.log('Fetching product:', id);
             const res = await apiEndpoints.getProduct(id);
-            console.log('✅ Product loaded:', res.data);
+            console.log('Product loaded:', res.data);
             return res.data;
         },
         enabled: isEditMode && !!id,
-        retry: false, // Не повторять запрос при ошибке
+        retry: false, // Do not retry on hard failures.
     });
 
-    // 🔍 Логирование ошибок
+    // Log product query errors without forcing redirect.
     useEffect(() => {
         if (productError) {
-            console.error('❌ Product query error:', productError);
+            console.error('Product query error:', productError);
             console.error('  - Status:', productError.response?.status);
             console.error('  - Data:', productError.response?.data);
-            // ❌ УБРАЛИ редирект на ошибку - пусть страница просто покажет ошибку
+            // Keep user on the page so the UI can show the error state.
         }
     }, [productError]);
 
@@ -71,7 +71,7 @@ export default function CreateProduct() {
 
     useEffect(() => {
         if (product) {
-            console.log('🔄 Filling form with product data:', product);
+            console.log('Filling form with product data:', product);
             setFormData({
                 name: product.name || '',
                 description: product.description || '',
@@ -172,7 +172,7 @@ export default function CreateProduct() {
             await queryClient.invalidateQueries(['my-stores']);
             navigate('/account');
         } catch (error) {
-            console.error('❌ Ошибка сохранения:', error);
+            console.error('Save error:', error);
             console.error('Response:', error.response?.data);
             alert(`Ошибка: ${error.response?.data?.message || error.message || 'Не удалось сохранить товар'}`);
         } finally {
@@ -221,8 +221,8 @@ export default function CreateProduct() {
                         <h2 className="text-lg font-bold">Информация</h2>
                         <input type="text" name="name" value={formData.name} onChange={handleInputChange} placeholder="Название товара" className="w-full px-4 py-2.5 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm focus:bg-white focus:border-[#007AFF] outline-none transition" required />
                         <div className="grid grid-cols-2 gap-4">
-                            <input type="number" name="price" value={formData.price} onChange={handleInputChange} placeholder="Цена ($)" className="px-4 py-2.5 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm focus:bg-white focus:border-[#007AFF] outline-none transition" required step="0.01" min="0" />
-                            {(isEditMode || formData.old_price) && (<input type="number" name="old_price" value={formData.old_price} onChange={handleInputChange} placeholder="Старая цена ($)" className="px-4 py-2.5 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm focus:bg-white focus:border-[#007AFF] outline-none transition" step="0.01" min="0" />)}
+                            <input type="number" name="price" value={formData.price} onChange={handleInputChange} placeholder="Цена (₽)" className="px-4 py-2.5 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm focus:bg-white focus:border-[#007AFF] outline-none transition" required step="0.01" min="0" />
+                            {(isEditMode || formData.old_price) && (<input type="number" name="old_price" value={formData.old_price} onChange={handleInputChange} placeholder="Старая цена (₽)" className="px-4 py-2.5 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm focus:bg-white focus:border-[#007AFF] outline-none transition" step="0.01" min="0" />)}
                         </div>
                         {!isEditMode && !formData.old_price && (<button type="button" onClick={() => setFormData(prev => ({ ...prev, old_price: '' }))} className="text-sm text-[#007AFF] hover:underline">+ Добавить старую цену (скидка)</button>)}
                         <textarea name="description" value={formData.description} onChange={handleInputChange} rows="4" placeholder="Описание товара..." className="w-full px-4 py-2.5 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm focus:bg-white focus:border-[#007AFF] outline-none transition resize-none"></textarea>
@@ -255,7 +255,7 @@ export default function CreateProduct() {
                             <div className="p-4">
                                 {formData.name ? (<h4 className="font-semibold text-sm mb-1">{formData.name}</h4>) : (<div className="h-4 bg-[#F2F2F7] rounded w-2/3 mb-2"></div>)}
                                 {selectedCategory && (<p className="text-xs text-text-secondary mb-2">{selectedCategory.name}</p>)}
-                                {formData.price ? (<div className="flex items-center gap-2"><span className="text-[#007AFF] font-bold text-lg">${formData.price}</span>{formData.old_price && parseFloat(formData.old_price) > parseFloat(formData.price) && (<span className="text-text-secondary line-through text-sm">${formData.old_price}</span>)}</div>) : (<div className="h-4 bg-[#F2F2F7] rounded w-1/3"></div>)}
+                                {formData.price ? (<div className="flex items-center gap-2"><span className="text-[#007AFF] font-bold text-lg">{formData.price}₽</span>{formData.old_price && parseFloat(formData.old_price) > parseFloat(formData.price) && (<span className="text-text-secondary line-through text-sm">{formData.old_price}₽</span>)}</div>) : (<div className="h-4 bg-[#F2F2F7] rounded w-1/3"></div>)}
                             </div>
                         </div>
                     </div>

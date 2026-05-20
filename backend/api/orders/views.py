@@ -1,11 +1,12 @@
 from decimal import Decimal
 from rest_framework import viewsets, permissions, serializers
 from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework import status
 from django.db import transaction
 from .models import Order, OrderItem
 from .serializers import OrderSerializer
-from api.cart.models import Cart, CartItem
-from api.products.models import Product
+from api.cart.models import Cart
 
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all()
@@ -20,7 +21,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         user = self.request.user
         cart = Cart.objects.get(user=user)
         
-        # Берем только выбранные товары
+        # Use only selected cart items.
         cart_items = cart.items.filter(selected=True)
         
         if not cart_items.exists():
@@ -31,10 +32,12 @@ class OrderViewSet(viewsets.ModelViewSet):
         for cart_item in cart_items:
             total_amount += cart_item.product.price * cart_item.quantity
 
-        # Сохраняем заказ с уже посчитанной суммой
-        order = serializer.save(buyer=user, status='created', total_amount=total_amount)
+        # Create order with precomputed total.
+        payment_method = serializer.validated_data.get('payment_method', 'card')
+        initial_status = 'confirmed' if payment_method == 'cash' else 'created'
+        order = serializer.save(buyer=user, status=initial_status, total_amount=total_amount)
 
-        # Списываем товары и создаем позиции заказа
+        # Decrease stock and create order line items.
         for cart_item in cart_items:
             product = cart_item.product
             
@@ -51,5 +54,54 @@ class OrderViewSet(viewsets.ModelViewSet):
                 price=product.price
             )
 
-        # Очищаем корзину (только выбранные товары)
+        # Remove only selected items from the cart.
         cart_items.delete()
+
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        order = self.get_object()
+
+        if order.status != 'created':
+            return Response(
+                {'detail': 'Отменить можно только заказ со статусом created.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        order.status = 'cancelled'
+        order.save(update_fields=['status', 'updated_at'])
+        return Response(self.get_serializer(order).data)
+
+    @action(detail=True, methods=['post'])
+    def pay(self, request, pk=None):
+        order = self.get_object()
+
+        if order.status != 'created':
+            return Response(
+                {'detail': 'Оплатить можно только заказ со статусом created.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        order.status = 'confirmed'
+        order.save(update_fields=['status', 'updated_at'])
+        return Response(self.get_serializer(order).data)
+
+    @action(detail=True, methods=['patch'])
+    def update_delivery_address(self, request, pk=None):
+        order = self.get_object()
+
+        if order.status != 'created':
+            return Response(
+                {'detail': 'Изменить адрес можно только для заказа со статусом created.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        delivery_address = (request.data.get('delivery_address') or '').strip()
+        if not delivery_address:
+            return Response(
+                {'detail': 'delivery_address обязателен.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        order.delivery_address = delivery_address
+        order.save(update_fields=['delivery_address', 'updated_at'])
+        return Response(self.get_serializer(order).data)

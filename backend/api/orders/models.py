@@ -3,7 +3,7 @@ from django.conf import settings
 from api.products.models import Product
 
 class Order(models.Model):
-    """Заказ"""
+    """Customer order."""
     STATUS_CHOICES = [
         ('created', 'Created'),
         ('confirmed', 'Confirmed'),
@@ -37,7 +37,7 @@ class Order(models.Model):
         return f"Order #{self.id} by {self.buyer.username}"
 
 class OrderItem(models.Model):
-    """Позиция заказа"""
+    """Single order line item."""
     order = models.ForeignKey(
         Order,
         on_delete=models.CASCADE,
@@ -49,7 +49,7 @@ class OrderItem(models.Model):
         related_name='order_items'
     )
     quantity = models.IntegerField()
-    price = models.DecimalField(max_digits=10, decimal_places=2)  # Цена на момент покупки
+    price = models.DecimalField(max_digits=10, decimal_places=2)  # Unit price at purchase time.
 
     class Meta:
         db_table = 'order_items'

@@ -12,7 +12,7 @@ dist
 dist-ssr
 *.local
 
-# Editor directories and filesэ
+# Editor directories and files
 .prettierrc
 .editorconfig
 .vscode/*

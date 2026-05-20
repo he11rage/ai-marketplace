@@ -4,26 +4,39 @@ import { apiEndpoints } from '../api/axios';
 export function useWishlist() {
     const queryClient = useQueryClient();
     
-    // 🔍 Проверяем наличие токена
     const token = localStorage.getItem('access_token');
+    const wishlistQueryKey = ['wishlist', token];
+
+    const normalizeWishlistItem = (item) => {
+        const normalizedProduct = item.product || (item.product_id ? {
+            id: item.product_id,
+            name: item.product_name,
+            price: item.product_price,
+            image: item.product_image,
+        } : null);
+
+        return {
+            ...item,
+            product: normalizedProduct,
+            productId: normalizedProduct?.id ?? item.product_id,
+        };
+    };
 
     const { data: items = [], isLoading } = useQuery({
-        queryKey: ['wishlist'],
-        queryFn: () => apiEndpoints.getWishlist().then(res => res.data),
-        enabled: !!token,  // 👈 Запрашиваем ТОЛЬКО если есть токен
+        queryKey: wishlistQueryKey,
+        queryFn: () => apiEndpoints.getWishlist().then(res => (res.data || []).map(normalizeWishlistItem)),
+        enabled: !!token,
         staleTime: 1000 * 60 * 5,
-        retry: false,  // 👈 Не повторять запрос при ошибке 401
+        retry: false,
     });
 
     const addMutation = useMutation({
         mutationFn: (productId) => apiEndpoints.addToWishlist({ product: productId }),
-        enabled: !!token,  // 👈 Мутация только с токеном
         onSuccess: () => {
-            queryClient.invalidateQueries(['wishlist']);
+            queryClient.invalidateQueries({ queryKey: wishlistQueryKey });
         },
         onError: (error) => {
             if (error.response?.status === 401) {
-                // Если 401 — чистим токены и редирект на главную
                 localStorage.removeItem('access_token');
                 localStorage.removeItem('refresh_token');
                 window.location.href = '/';
@@ -33,9 +46,8 @@ export function useWishlist() {
 
     const removeMutation = useMutation({
         mutationFn: (id) => apiEndpoints.removeFromWishlist(id),
-        enabled: !!token,  // 👈 Мутация только с токеном
         onSuccess: () => {
-            queryClient.invalidateQueries(['wishlist']);
+            queryClient.invalidateQueries({ queryKey: wishlistQueryKey });
         },
         onError: (error) => {
             if (error.response?.status === 401) {
@@ -47,13 +59,12 @@ export function useWishlist() {
     });
 
     const toggle = (product) => {
-        // 🔴 Если нет токена — не делаем ничего (или можно показать модалку "войдите")
         if (!token) {
             window.location.href = '/login';
             return;
         }
         
-        const existing = items.find(i => i.product?.id === product.id);
+        const existing = items.find(i => i.productId === product.id || i.product?.id === product.id);
         if (existing) {
             removeMutation.mutate(existing.id);
         } else {
@@ -62,7 +73,7 @@ export function useWishlist() {
     };
 
     const isInWishlist = (productId) => {
-        return items.some(i => i.product?.id === productId);
+        return items.some(i => i.productId === productId || i.product?.id === productId);
     };
 
     const removeFromWishlist = (id) => {

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiEndpoints } from '../api/axios';
 import ProductCard from '../components/ui/ProductCard';
@@ -10,11 +10,34 @@ import EmptyState from '../components/ui/EmptyState';
 export default function Home() {
 	const [view, setView] = useState('products');
 	const navigate = useNavigate();
+	const [searchParams] = useSearchParams();
+	const [productSort, setProductSort] = useState('relevance');
+	const [storeSort, setStoreSort] = useState('relevance');
+
+	const selectedStoreIds = useMemo(() => {
+		const storesRaw = searchParams.get('store_ids') || searchParams.get('stores') || '';
+		return storesRaw
+			.split(',')
+			.map((value) => Number.parseInt(value.trim(), 10))
+			.filter((value) => Number.isInteger(value));
+	}, [searchParams]);
+
+	const hasSelectedStores = selectedStoreIds.length > 0;
+	const productOrderingBySort = {
+		relevance: 'relevance',
+		price_asc: 'price',
+		price_desc: '-price',
+	};
 
 	const { data: products, isLoading: loadingProducts, error: productsError } = useQuery({
-		queryKey: ['products'],
+		queryKey: ['products', { productSort, selectedStoreIds }],
 		queryFn: async () => {
-			const res = await apiEndpoints.getProducts();
+			const params = {};
+			params.ordering = productOrderingBySort[productSort];
+			if (hasSelectedStores) {
+				params.store_ids = selectedStoreIds.join(',');
+			}
+			const res = await apiEndpoints.getProducts(params);
 			return res.data;
 		},
 	});
@@ -26,6 +49,14 @@ export default function Home() {
 			return res.data;
 		},
 	});
+
+	const sortedStores = useMemo(() => {
+		if (!stores) return [];
+		if (storeSort === 'created_at') {
+			return [...stores].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+		}
+		return stores;
+	}, [stores, storeSort]);
 
 	return (
 		<div className="min-h-screen">
@@ -65,10 +96,26 @@ export default function Home() {
 							Магазины
 						</button>
 					</div>
-					<select className="px-3 py-2 rounded-xl bg-white border border-[#E5E5EA] text-sm">
-						<option>По популярности</option>
-						<option>Цена: по возрастанию</option>
-					</select>
+					{view === 'products' ? (
+						<select
+							value={productSort}
+							onChange={(event) => setProductSort(event.target.value)}
+							className="px-3 py-2 rounded-xl bg-white border border-[#E5E5EA] text-sm"
+						>
+							<option value="relevance">По релевантности</option>
+							<option value="price_asc">Цена: по возрастанию</option>
+							<option value="price_desc">Цена: по убыванию</option>
+						</select>
+					) : (
+						<select
+							value={storeSort}
+							onChange={(event) => setStoreSort(event.target.value)}
+							className="px-3 py-2 rounded-xl bg-white border border-[#E5E5EA] text-sm"
+						>
+							<option value="relevance">По релевантности</option>
+							<option value="created_at">По дате создания</option>
+						</select>
+					)}
 				</div>
 
 				{/* Grid */}
@@ -99,11 +146,11 @@ export default function Home() {
 									description={storesError ? "Не удалось загрузить магазины." : "Стань первым — создай свой магазин прямо сейчас!"}
 									icon="box"
 									actionLabel="Создать магазин"
-									onAction={() => navigate('/create-store')}  // 👈 Теперь кнопка ведёт куда надо
+									onAction={() => navigate('/create-store')}  // Route action to store creation.
 								/>
 							</div>
 						) : (
-							stores.map(store => (
+							sortedStores.map(store => (
 								<div
 									key={store.id}
 									className="bg-white rounded-2xl shadow-subtle overflow-hidden hover:shadow-card transition-all duration-300 cursor-pointer group hover:-translate-y-1"
@@ -111,7 +158,7 @@ export default function Home() {
 								>
 									<div className="h-28" style={{ background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)' }}></div>
 									<div className="p-5 -mt-8 relative">
-										{/* Логотип с корректным отображением */}
+										{/* Store logo with fallback initial. */}
 										<div className="w-16 h-16 rounded-2xl bg-white shadow-lg border-4 border-white flex items-center justify-center font-bold text-lg text-[#007AFF] mb-3 overflow-hidden">
 											{store.logo ? (
 												<img src={store.logo} alt={store.name} className="w-full h-full object-cover" />

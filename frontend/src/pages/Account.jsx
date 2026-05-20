@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiEndpoints } from '../api/axios';
 import Badge from '../components/ui/Badge';
@@ -11,16 +11,26 @@ import { useCart } from '../hooks/useCart';
 export default function Account() {
     const [activeTab, setActiveTab] = useState('dashboard');
     const navigate = useNavigate();
+    const location = useLocation();
     const token = localStorage.getItem('access_token');
 
-    // Загрузка данных пользователя
+    useEffect(() => {
+        const requestedTab = location.state?.tab;
+        const allowedTabs = ['dashboard', 'orders', 'stores', 'favorites', 'settings'];
+
+        if (requestedTab && allowedTabs.includes(requestedTab)) {
+            setActiveTab(requestedTab);
+        }
+    }, [location.state]);
+
+    // Load current user profile.
     const { data: user, isLoading: userLoading } = useQuery({
         queryKey: ['user'],
         queryFn: () => apiEndpoints.me().then(res => res.data),
         enabled: !!token,
     });
 
-    // 🔴 Функция выхода из аккаунта
+    // Clear auth state and reload to reset client caches.
     const handleLogout = () => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
@@ -34,7 +44,7 @@ export default function Account() {
         return null;
     }
 
-    // Формируем инициалы или первую букву логина
+    // Build initials for avatar fallback.
     const getUserInitials = () => {
         if (!user) return 'АИ';
 
@@ -53,7 +63,7 @@ export default function Account() {
         return 'АИ';
     };
 
-    // Формируем отображаемое имя
+    // Build display name for account header.
     const getUserName = () => {
         if (!user) return 'Пользователь';
 
@@ -112,7 +122,7 @@ export default function Account() {
                     </nav>
                 </div>
 
-                {/* 🔴 Кнопка выхода внизу */}
+                {/* Logout button pinned to sidebar bottom. */}
                 <button
                     onClick={handleLogout}
                     className="w-full mt-4 px-3 py-2.5 rounded-xl text-sm font-medium text-[#FF3B30] bg-[#FF3B30]/10 hover:bg-[#FF3B30]/20 transition flex items-center justify-center gap-2"
@@ -136,7 +146,7 @@ export default function Account() {
     );
 }
 
-// --- Вкладка: Обзор ---
+// Dashboard tab.
 function DashboardContent({ navigate, user }) {
     const { data: orders, isLoading: ordersLoading } = useQuery({
         queryKey: ['orders'],
@@ -159,9 +169,14 @@ function DashboardContent({ navigate, user }) {
         userStores.some(store => store.id === product.store)
     ) || [];
 
-    const totalRevenue = orders
-        ?.filter(order => order.status === 'delivered')
-        .reduce((sum, order) => sum + parseFloat(order.total || 0), 0) || 0;
+    const confirmedOwnerIncome = Number(user?.confirmed_owner_items_count || 0);
+    const currentWeekIncome = Number(user?.confirmed_owner_items_week_count || 0);
+    const previousWeekIncome = Number(user?.confirmed_owner_items_previous_week_count || 0);
+    const weeklyIncomeGrowth = previousWeekIncome === 0
+        ? (currentWeekIncome > 0 ? 100 : 0)
+        : ((currentWeekIncome - previousWeekIncome) / previousWeekIncome) * 100;
+    const formattedWeeklyIncomeGrowth = `${weeklyIncomeGrowth >= 0 ? '+' : ''}${weeklyIncomeGrowth.toFixed(1)}%`;
+    const weeklyGrowthColorClass = weeklyIncomeGrowth >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]';
 
     const lowStockProducts = userProducts.filter(p => (p.stock_quantity || 0) < 5).length;
 
@@ -204,8 +219,10 @@ function DashboardContent({ navigate, user }) {
                 </div>
                 <div className="bg-white rounded-xl shadow-subtle p-5">
                     <div className="text-sm text-text-secondary mb-1">Доход</div>
-                    <div className="text-2xl font-bold">${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
-                    <div className="text-xs text-[#34C759] mt-1">+8% за неделю</div>
+                    <div className="text-2xl font-bold">
+                        {confirmedOwnerIncome.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ₽
+                    </div>
+                    <div className={`text-xs mt-1 ${weeklyGrowthColorClass}`}>За неделю: {formattedWeeklyIncomeGrowth}</div>
                 </div>
                 <div className="bg-white rounded-xl shadow-subtle p-5">
                     <div className="text-sm text-text-secondary mb-1">Товары</div>
@@ -245,7 +262,7 @@ function DashboardContent({ navigate, user }) {
                                         <td className="py-3 font-medium">#{order.id}</td>
                                         <td className="py-3">{order.items?.[0]?.name || 'Товар'}</td>
                                         <td className="py-3 text-text-secondary">{new Date(order.created_at).toLocaleDateString('ru-RU')}</td>
-                                        <td className="py-3 font-medium">${order.total}</td>
+                                        <td className="py-3 font-medium">{order.total}₽</td>
                                         <td className="py-3">
                                             <Badge variant={statusMap[order.status]?.variant || 'default'}>
                                                 {statusMap[order.status]?.label || order.status}
@@ -266,70 +283,315 @@ function DashboardContent({ navigate, user }) {
     );
 }
 
-// --- Вкладка: Заказы ---
+// Orders tab.
 function OrdersContent() {
+    const queryClient = useQueryClient();
     const { data: orders, isLoading } = useQuery({
         queryKey: ['orders'],
         queryFn: () => apiEndpoints.getOrders().then(res => res.data),
     });
+    const { data: products } = useQuery({
+        queryKey: ['products'],
+        queryFn: () => apiEndpoints.getProducts().then(res => res.data),
+    });
+    const [selectedOrder, setSelectedOrder] = useState(null);
+    const [isEditingAddress, setIsEditingAddress] = useState(false);
+    const [newAddress, setNewAddress] = useState('');
+    const [actionError, setActionError] = useState('');
+
+    const productsById = new Map((products || []).map(product => [product.id, product]));
 
     const statusMap = {
-        delivered: { label: 'Доставлен', variant: 'success' },
-        processing: { label: 'В обработке', variant: 'info' },
-        pending: { label: 'Ожидает оплаты', variant: 'warning' },
+        created: { label: 'Ожидает оплаты', variant: 'warning' },
+        confirmed: { label: 'Подтвержден', variant: 'info' },
         cancelled: { label: 'Отменён', variant: 'error' },
     };
+    const paymentMethodMap = {
+        card: 'Банковская карта',
+        sbp: 'СБП',
+        cash: 'Cash on Delivery',
+    };
+
+    const syncOrderInState = (updatedOrder) => {
+        setSelectedOrder(updatedOrder);
+        queryClient.setQueryData(['orders'], (previous = []) =>
+            previous.map((order) => (order.id === updatedOrder.id ? updatedOrder : order))
+        );
+    };
+
+    const parseApiError = (error, fallback) => {
+        const details = error?.response?.data;
+        if (typeof details === 'string') return details;
+        return details?.detail || details?.non_field_errors?.[0] || fallback;
+    };
+
+    const cancelOrderMutation = useMutation({
+        mutationFn: (orderId) => apiEndpoints.cancelOrder(orderId).then((res) => res.data),
+        onSuccess: (updatedOrder) => {
+            setActionError('');
+            setIsEditingAddress(false);
+            syncOrderInState(updatedOrder);
+        },
+        onError: (error) => {
+            setActionError(parseApiError(error, 'Не удалось отменить заказ.'));
+        },
+    });
+
+    const payOrderMutation = useMutation({
+        mutationFn: (orderId) => apiEndpoints.payOrder(orderId).then((res) => res.data),
+        onSuccess: (updatedOrder) => {
+            setActionError('');
+            syncOrderInState(updatedOrder);
+        },
+        onError: (error) => {
+            setActionError(parseApiError(error, 'Не удалось оплатить заказ.'));
+        },
+    });
+
+    const updateAddressMutation = useMutation({
+        mutationFn: ({ orderId, deliveryAddress }) =>
+            apiEndpoints.updateOrderDeliveryAddress(orderId, { delivery_address: deliveryAddress }).then((res) => res.data),
+        onSuccess: (updatedOrder) => {
+            setActionError('');
+            setIsEditingAddress(false);
+            syncOrderInState(updatedOrder);
+        },
+        onError: (error) => {
+            setActionError(parseApiError(error, 'Не удалось обновить адрес доставки.'));
+        },
+    });
+
+    const openOrderDetails = (order) => {
+        setSelectedOrder(order);
+        setNewAddress(order.delivery_address || '');
+        setIsEditingAddress(false);
+        setActionError('');
+    };
+
+    const closeOrderDetails = () => {
+        setSelectedOrder(null);
+        setIsEditingAddress(false);
+        setActionError('');
+    };
+
+    const canManageOrder = selectedOrder?.status === 'created';
 
     if (isLoading) return <div className="p-8 text-center text-text-secondary">Загрузка заказов...</div>;
 
     return (
-        <div className="bg-white rounded-2xl shadow-subtle p-6 animate-fade">
-            <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-bold">История заказов</h2>
-                <div className="flex gap-2">
-                    <input type="text" placeholder="Поиск по номеру..." className="px-4 py-2 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm" />
-                    <select className="px-3 py-2 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm">
-                        <option>Все статусы</option>
-                        <option>Доставлен</option>
-                        <option>В обработке</option>
-                    </select>
+        <>
+            <div className="bg-white rounded-2xl shadow-subtle p-6 animate-fade">
+                <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-lg font-bold">История заказов</h2>
                 </div>
-            </div>
 
-            <div className="space-y-3">
-                {orders?.map(order => (
-                    <div key={order.id} className="flex items-center justify-between p-4 bg-[#F5F5F7] rounded-xl hover:bg-[#FAFAFA] transition">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 product-img rounded-lg" />
-                            <div>
-                                <div className="font-medium text-sm">Заказ #{order.id}</div>
-                                <div className="text-xs text-text-secondary">{new Date(order.created_at).toLocaleDateString('ru-RU')} • {order.items?.length || 0} товаров</div>
+                <div className="space-y-3">
+                    {orders?.map(order => (
+                        <div key={order.id} className="flex items-center justify-between p-4 bg-[#F5F5F7] rounded-xl hover:bg-[#FAFAFA] transition">
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center min-w-[80px]">
+                                    {(order.items || []).slice(0, 4).map((item, index) => {
+                                        const product = productsById.get(item.product);
+                                        const logo = product?.image || item.product_image;
+
+                                        return (
+                                            <div
+                                                key={`${order.id}-${item.product}-${index}`}
+                                                className={`w-10 h-10 rounded-full border-2 border-white bg-[#F2F2F7] overflow-hidden flex items-center justify-center text-[11px] font-semibold text-text-secondary ${index > 0 ? '-ml-3' : ''}`}
+                                                style={{ zIndex: 10 - index }}
+                                                title={product?.name || item.product_name || `Товар #${item.product}`}
+                                            >
+                                                {logo ? (
+                                                    <img src={logo} alt={product?.name || item.product_name || 'Товар'} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    (product?.name?.charAt(0) || item.product_name?.charAt(0) || '•').toUpperCase()
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                    {(order.items?.length || 0) > 4 && (
+                                        <div className="-ml-3 w-10 h-10 rounded-full border-2 border-white bg-white flex items-center justify-center text-[11px] font-semibold text-text-secondary">
+                                            +{order.items.length - 4}
+                                        </div>
+                                    )}
+                                </div>
+                                <div>
+                                    <div className="font-medium text-sm">Заказ #{order.id}</div>
+                                    <div className="text-xs text-text-secondary">{new Date(order.created_at).toLocaleDateString('ru-RU')} • {order.items?.length || 0} товаров</div>
+                                </div>
+                            </div>
+                            <div className="text-right flex items-center gap-4">
+                                <div>
+                                    <div className="font-bold">{order.total}₽</div>
+                                    <Badge variant={statusMap[order.status]?.variant || 'default'}>
+                                        {statusMap[order.status]?.label || order.status}
+                                    </Badge>
+                                </div>
+                                <Button variant="outline" size="sm" onClick={() => openOrderDetails(order)}>
+                                    Подробнее
+                                </Button>
                             </div>
                         </div>
-                        <div className="text-right">
-                            <div className="font-bold">${order.total}</div>
-                            <Badge variant={statusMap[order.status]?.variant || 'default'}>
-                                {statusMap[order.status]?.label || order.status}
-                            </Badge>
-                        </div>
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
 
-            <div className="flex items-center justify-between mt-6 border-t border-[#E5E5EA] pt-4">
-                <span className="text-sm text-text-secondary">Показано {orders?.length || 0} заказов</span>
-                <div className="flex gap-2">
-                    <button className="px-3 py-1.5 rounded-lg border border-[#E5E5EA] text-sm hover:bg-[#F2F2F7]">← Назад</button>
-                    <button className="px-3 py-1.5 rounded-lg bg-[#007AFF] text-white text-sm">1</button>
-                    <button className="px-3 py-1.5 rounded-lg border border-[#E5E5EA] text-sm hover:bg-[#F2F2F7]">2</button>
-                    <button className="px-3 py-1.5 rounded-lg border border-[#E5E5EA] text-sm hover:bg-[#F2F2F7]">Далее →</button>
+                <div className="flex items-center justify-between mt-6 border-t border-[#E5E5EA] pt-4">
+                    <span className="text-sm text-text-secondary">Показано {orders?.length || 0} заказов</span>
                 </div>
             </div>
-        </div>
+
+            {selectedOrder && (
+                <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={closeOrderDetails}>
+                    <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-start justify-between mb-5">
+                            <div>
+                                <h3 className="text-xl font-bold">Заказ #{selectedOrder.id}</h3>
+                                <p className="text-sm text-text-secondary mt-1">
+                                    {new Date(selectedOrder.created_at).toLocaleDateString('ru-RU')} • {selectedOrder.items?.length || 0} товаров
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                className="w-9 h-9 rounded-lg hover:bg-[#F2F2F7] transition text-lg"
+                                onClick={closeOrderDetails}
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        <div className="mb-5 p-4 rounded-xl bg-[#F5F5F7]">
+                            <div className="flex flex-wrap gap-3 items-center">
+                                <Badge variant={statusMap[selectedOrder.status]?.variant || 'default'}>
+                                    {statusMap[selectedOrder.status]?.label || selectedOrder.status}
+                                </Badge>
+                                <span className="text-sm text-text-secondary">
+                                    Статус: {statusMap[selectedOrder.status]?.label || selectedOrder.status}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 text-sm">
+                                <div>
+                                    <div className="text-text-secondary">Дата заказа</div>
+                                    <div className="font-medium">{new Date(selectedOrder.created_at).toLocaleString('ru-RU')}</div>
+                                </div>
+                                <div>
+                                    <div className="text-text-secondary">Примерная дата доставки</div>
+                                    <div className="font-medium">
+                                        {selectedOrder.estimated_delivery_date
+                                            ? new Date(selectedOrder.estimated_delivery_date).toLocaleDateString('ru-RU')
+                                            : '—'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {selectedOrder.status === 'created' && (
+                            <div className="mb-5 p-4 rounded-xl border border-[#FFE5A3] bg-[#FFF8E6]">
+                                <div className="font-semibold text-[#B26A00] mb-1">Ожидает оплаты</div>
+                                <div className="text-sm text-text-secondary">
+                                    Выбранный способ оплаты: {selectedOrder.payment_method_display || paymentMethodMap[selectedOrder.payment_method] || selectedOrder.payment_method}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="mb-5">
+                            <h4 className="font-semibold mb-3">Содержимое заказа</h4>
+                            <div className="space-y-2">
+                                {(selectedOrder.items || []).map((item, index) => {
+                                    const product = productsById.get(item.product);
+                                    const itemName = product?.name || item.product_name || `Товар #${item.product}`;
+                                    return (
+                                        <div key={`${selectedOrder.id}-${item.product}-${index}`} className="flex items-center justify-between p-3 rounded-lg bg-[#F8F8FA]">
+                                            <div>
+                                                <div className="font-medium text-sm">{itemName}</div>
+                                                <div className="text-xs text-text-secondary">Количество: {item.quantity}</div>
+                                            </div>
+                                            <div className="text-sm font-semibold">{item.price}₽</div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <div className="mt-3 text-right font-bold text-lg">Итого: {selectedOrder.total}₽</div>
+                        </div>
+
+                        <div className="mb-4">
+                            <h4 className="font-semibold mb-2">Адрес доставки</h4>
+                            {isEditingAddress ? (
+                                <div className="space-y-2">
+                                    <textarea
+                                        value={newAddress}
+                                        onChange={(e) => setNewAddress(e.target.value)}
+                                        className="w-full min-h-20 px-4 py-3 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm focus:bg-white focus:border-[#007AFF] outline-none transition resize-none"
+                                    />
+                                    <div className="flex gap-2 justify-end">
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={() => {
+                                                setIsEditingAddress(false);
+                                                setNewAddress(selectedOrder.delivery_address || '');
+                                            }}
+                                        >
+                                            Отмена
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            onClick={() => updateAddressMutation.mutate({
+                                                orderId: selectedOrder.id,
+                                                deliveryAddress: newAddress.trim(),
+                                            })}
+                                            disabled={updateAddressMutation.isPending || !newAddress.trim()}
+                                        >
+                                            {updateAddressMutation.isPending ? 'Сохраняем...' : 'Сохранить адрес'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-sm text-text-secondary">{selectedOrder.delivery_address || '—'}</div>
+                            )}
+                        </div>
+
+                        {actionError && (
+                            <div className="mb-4 text-sm text-[#FF3B30]">{actionError}</div>
+                        )}
+
+                        <div className="flex flex-wrap gap-2 justify-end border-t border-[#E5E5EA] pt-4">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => cancelOrderMutation.mutate(selectedOrder.id)}
+                                disabled={!canManageOrder || cancelOrderMutation.isPending}
+                            >
+                                {cancelOrderMutation.isPending ? 'Отменяем...' : 'Отменить заказ'}
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => {
+                                    setActionError('');
+                                    setIsEditingAddress(true);
+                                }}
+                                disabled={!canManageOrder || isEditingAddress}
+                            >
+                                Изменить адрес доставки
+                            </Button>
+                            {selectedOrder.status === 'created' && (
+                                <Button
+                                    size="sm"
+                                    onClick={() => payOrderMutation.mutate(selectedOrder.id)}
+                                    disabled={payOrderMutation.isPending}
+                                >
+                                    {payOrderMutation.isPending ? 'Оплачиваем...' : 'Оплатить'}
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
     );
 }
 
-// --- Вкладка: Магазины ---
+// Stores tab.
 function StoresContent({ navigate, user }) {
     const { data: stores, isLoading } = useQuery({
         queryKey: ['my-stores'],
@@ -368,7 +630,7 @@ function StoresContent({ navigate, user }) {
                                     )}
                                 </div>
                                 <h3 className="font-bold text-lg mb-1">{store.name}</h3>
-                                <p className="text-xs text-text-secondary mb-3">{store.slug}.marketflow.ru</p>
+                                <p className="text-xs text-text-secondary mb-3 line-clamp-2">{store.description}</p>
                                 <div className="flex gap-2">
                                     <Button variant="outline" size="sm" className="flex-1" onClick={(e) => { e.stopPropagation(); navigate(`/store/${store.id}`); }}>Открыть</Button>
                                     <Button variant="secondary" size="sm" className="flex-1" onClick={(e) => { e.stopPropagation(); navigate(`/create-store/${store.id}`); }}>Редактировать</Button>
@@ -392,7 +654,7 @@ function StoresContent({ navigate, user }) {
     );
 }
 
-// --- Вкладка: Избранное ---
+// Favorites tab.
 function FavoritesContent() {
     const { items: wishlistItems, isLoading, removeFromWishlist } = useWishlist();
     const { items: cartItems, addToCart } = useCart();
@@ -473,8 +735,8 @@ function FavoritesContent() {
                             <div className="p-4">
                                 <h3 className="font-semibold text-sm mb-1 truncate">{product.name}</h3>
                                 <div className="flex items-center gap-2 mb-2">
-                                    <span className="text-[#007AFF] font-bold">${product.price}</span>
-                                    {product.old_price && <span className="text-xs text-text-secondary line-through">${product.old_price}</span>}
+                                    <span className="text-[#007AFF] font-bold">{product.price}₽</span>
+                                    {product.old_price && <span className="text-xs text-text-secondary line-through">{product.old_price}₽</span>}
                                 </div>
                                 <p className="text-xs text-text-secondary mb-3">{formattedDate}</p>
                                 <button
@@ -484,7 +746,7 @@ function FavoritesContent() {
                                         }`}
                                     onClick={(e) => handleCartAction(e, product)}
                                 >
-                                    {inCart ? '✓ В корзине' : 'В корзину'}
+                                    {inCart ? 'В корзине' : 'Добавить в корзину'}
                                 </button>
                             </div>
                         </div>
@@ -495,7 +757,7 @@ function FavoritesContent() {
     );
 }
 
-// --- Вкладка: Настройки ---
+// Settings tab.
 function SettingsContent() {
     const { data: user, isLoading, refetch } = useQuery({
         queryKey: ['user'],

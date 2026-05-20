@@ -20,14 +20,14 @@ export default function CreateStore() {
     const [previewUrl, setPreviewUrl] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
 
-    // Загрузка данных магазина при редактировании
+    // Load store data in edit mode.
     const { data: store, isLoading: loadingStore } = useQuery({
         queryKey: ['store', id],
         queryFn: () => apiEndpoints.getStore(id).then(res => res.data),
         enabled: isEditMode,
     });
 
-    // Заполняем форму данными из БД
+    // Prefill form with existing store values.
     useEffect(() => {
         if (store) {
             setFormData({

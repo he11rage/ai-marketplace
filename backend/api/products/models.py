@@ -8,7 +8,7 @@ from ml.embeddings import get_embedding
 
 
 class Product(models.Model):
-    """Модель товара с векторным эмбеддингом для ML-поиска"""
+    """Product model with vector embeddings for ML search."""
 
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="products")
     category = models.ForeignKey(
@@ -57,7 +57,7 @@ class WishlistItem(models.Model):
 
     class Meta:
         unique_together = ('user', 'product')
-        ordering = ['-added_at'] # Сортировка по дате добавления (как в макете)
+        ordering = ['-added_at']  # Keep newest wishlist items first.
 
     def __str__(self):
         return f"{self.user.username} -> {self.product.name}"

@@ -7,12 +7,13 @@ export function useAuth() {
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  const login = async (username, password) => {  // ← username вместо email
+  // Login uses username (not email) for Djoser JWT endpoint.
+  const login = async (username, password) => {
     setIsLoading(true);
     setError(null);
     
     try {
-      const response = await apiEndpoints.login({ username, password });  // ← username
+      const response = await apiEndpoints.login({ username, password });
       localStorage.setItem('access_token', response.data.access);
       localStorage.setItem('refresh_token', response.data.refresh);
       navigate('/');

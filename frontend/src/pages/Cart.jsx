@@ -53,6 +53,7 @@ export default function Cart() {
                 onSuccess: (response) => {
                     setDeliveryAddress('');
                     setCheckoutSuccess(`Заказ #${response.data.id} успешно оформлен.`);
+                    navigate('/account', { state: { tab: 'orders' } });
                 },
                 onError: (error) => {
                     const details = error.response?.data;
@@ -127,7 +128,9 @@ export default function Cart() {
 
                             <div className="flex-1 min-w-0">
                                 <h3 className="font-semibold text-sm mb-1 truncate group-hover:text-[#007AFF] transition">{item.name}</h3>
-                                <p className="text-xs text-text-secondary mb-3">{item.specs || 'SKU: ' + (item.sku || 'N/A')}</p>
+                                <p className="text-xs text-text-secondary mb-3 line-clamp-2">
+                                    {item.description || 'Описание товара пока не добавлено'}
+                                </p>
                                 <div className="flex items-center gap-3">
                                     <button
                                         onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, -1); }}
@@ -142,8 +145,8 @@ export default function Cart() {
                             </div>
 
                             <div className="text-right">
-                                <div className="font-bold text-[#007AFF] mb-1">${item.price * item.quantity}</div>
-                                {item.oldPrice && <span className="text-xs text-text-secondary line-through">${item.oldPrice}</span>}
+                                <div className="font-bold text-[#007AFF] mb-1">{item.price * item.quantity}₽</div>
+                                {item.oldPrice && <span className="text-xs text-text-secondary line-through">{item.oldPrice}₽</span>}
                             </div>
 
                             <button
@@ -165,12 +168,12 @@ export default function Cart() {
                         <h3 className="font-bold mb-4">Итого</h3>
                         <div className="space-y-2 text-sm mb-4">
                             <div className="flex justify-between"><span className="text-text-secondary">Выбрано товаров</span><span className="font-medium">{selectedCount}</span></div>
-                            <div className="flex justify-between"><span className="text-text-secondary">Подитог</span><span className="font-medium">${selectedTotal}</span></div>
-                            <div className="flex justify-between"><span className="text-text-secondary">Доставка</span><span className={shipping === 0 ? 'text-[#34C759] font-medium' : ''}>{shipping === 0 ? 'Бесплатно' : `$${shipping}`}</span></div>
+                            <div className="flex justify-between"><span className="text-text-secondary">Подитог</span><span className="font-medium">{selectedTotal}₽</span></div>
+                            <div className="flex justify-between"><span className="text-text-secondary">Доставка</span><span className={shipping === 0 ? 'text-[#34C759] font-medium' : ''}>{shipping === 0 ? 'Бесплатно' : `${shipping}₽`}</span></div>
                         </div>
                         <div className="border-t border-[#E5E5EA] pt-3 mb-4 flex justify-between">
                             <span className="font-bold">Всего</span>
-                            <span className="font-bold text-xl text-[#007AFF]">${finalTotal}</span>
+                            <span className="font-bold text-xl text-[#007AFF]">{finalTotal}₽</span>
                         </div>
                         <div className="space-y-3 mb-4">
                             <textarea

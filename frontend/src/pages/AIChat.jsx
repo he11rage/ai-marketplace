@@ -31,16 +31,16 @@ export default function AIChat() {
 
       const data = await response.json();
       console.log('📥 Ответ от сервера:', data);
-      
+
       // AI ответ с текстом (всегда добавляем)
-      const aiMsg = { 
-        id: Date.now() + 1, 
-        text: data.message, 
+      const aiMsg = {
+        id: Date.now() + 1,
+        text: data.message,
         sender: 'ai',
         type: 'text'  // ← ИСПРАВЛЕНО: всегда 'text' для текстовых сообщений
       };
       setMessages(prev => [...prev, aiMsg]);
-      
+
       // Если есть товары — добавляем их как отдельное сообщение-карточки
       if (data.products && data.products.length > 0) {
         const productsMsg = {
@@ -54,7 +54,7 @@ export default function AIChat() {
     } catch (error) {
       console.error('AI Chat error:', error);
       setMessages(prev => [
-        ...prev, 
+        ...prev,
         { id: Date.now() + 1, text: "Произошла ошибка. Попробуйте позже.", sender: 'ai', type: 'text' }
       ]);
     } finally {
@@ -84,15 +84,15 @@ export default function AIChat() {
     if (msg.type === 'text') {
       return (
         <div key={msg.id} className={`max-w-[80%] px-4 py-3 text-sm leading-relaxed ${
-          msg.sender === 'user' 
-            ? 'ml-auto bg-[#007AFF] text-white rounded-2xl rounded-tr-none' 
+          msg.sender === 'user'
+            ? 'ml-auto bg-[#007AFF] text-white rounded-2xl rounded-tr-none'
             : 'mr-auto bg-[#F2F2F7] text-text-primary rounded-2xl rounded-tl-none'
         }`}>
           {msg.text}
         </div>
       );
     }
-    
+
     // Карточки товаров (встроены в чат!)
     if (msg.type === 'products') {
       return (
@@ -104,31 +104,31 @@ export default function AIChat() {
                 <div className="w-24 h-24 rounded-lg bg-gradient-to-br from-[#f0f4ff] to-[#e8f0ff] flex-shrink-0 flex items-center justify-center text-2xl">
                   📦
                 </div>
-                
+
                 <div className="flex-1">
                   <h4 className="font-semibold text-base mb-1">{item.name}</h4>
-                  
+
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-[#007AFF] font-bold text-lg">{item.price}₽</span>
                     {item.old_price && (
                       <span className="text-sm text-text-secondary line-through">{item.old_price}₽</span>
                     )}
                   </div>
-                  
+
                   {item.description && (
                     <p className="text-sm text-text-secondary mb-2 line-clamp-2">
                       {item.description}
                     </p>
                   )}
-                  
+
                   {item.rating && (
                     <div className="flex items-center gap-1 mb-3">
                       <span className="text-[#FF9500] text-sm">★</span>
                       <span className="text-sm text-text-secondary">{item.rating}</span>
                     </div>
                   )}
-                  
-                  <Button 
+
+                  <Button
                     size="sm"
                     onClick={() => handleAddToCart(item.id, item.name)}
                     className="bg-[#007AFF] hover:bg-[#0056CC]"
@@ -142,7 +142,7 @@ export default function AIChat() {
         </div>
       );
     }
-    
+
     return null;
   };
 
@@ -159,7 +159,7 @@ export default function AIChat() {
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto space-y-4 bg-[#FAFAFA] rounded-2xl p-6">
         {messages.map(renderMessage)}
-        
+
         {isLoading && (
           <div className="mr-auto bg-[#F2F2F7] text-text-secondary rounded-2xl rounded-tl-none px-4 py-3">
             Печатаю...
@@ -178,7 +178,7 @@ export default function AIChat() {
           className="flex-1 px-4 py-3 rounded-xl bg-[#F2F2F7] border border-transparent focus:bg-white focus:border-[#007AFF] outline-none text-sm"
           disabled={isLoading}
         />
-        <button 
+        <button
           onClick={handleSend}
           disabled={isLoading}
           className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#007AFF] to-[#5856D6] flex items-center justify-center text-white hover:opacity-90 transition disabled:opacity-50"

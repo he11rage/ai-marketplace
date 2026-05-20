@@ -10,23 +10,25 @@ import EmptyState from '../components/ui/EmptyState';
 export default function StoreDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const token = localStorage.getItem('access_token');
 
     const [showToast, setShowToast] = useState(false);
 
-    // 1. Запрос данных о магазине
+    // Request store details.
     const { data: store, isLoading: storeLoading, error: storeError } = useQuery({
         queryKey: ['store', id],
         queryFn: () => apiEndpoints.getStore(id).then(res => res.data),
         enabled: !!id,
     });
 
-    // 2. Запрос текущего пользователя
+    // Request current user for ownership checks.
     const { data: currentUser, isLoading: userLoading } = useQuery({
         queryKey: ['user'],
         queryFn: () => apiEndpoints.me().then(res => res.data),
+        enabled: !!token,
     });
 
-    // 3. Запрос товаров этого магазина
+    // Request products for this store.
     const { data: products, isLoading: productsLoading } = useQuery({
         queryKey: ['products', 'store', id],
         queryFn: async () => {
@@ -38,29 +40,29 @@ export default function StoreDetail() {
 
     const isOwner = store && currentUser ? store.owner_id === currentUser.id : false;
 
-    console.log('🔍 Owner check:', {
+    console.log('Owner check:', {
         storeOwnerId: store?.owner_id,
         currentUserId: currentUser?.id,
         isOwner
     });
 
 
-    // Форматируем дату
+    // Format creation date label.
     const formatDate = (dateString) => {
         if (!dateString) return '2024';
         const date = new Date(dateString);
         return date.toLocaleDateString('ru-RU', { year: 'numeric', month: 'long' });
     };
 
-    // Копирование ссылки
+    // Copy current page URL.
     const handleShare = () => {
         navigator.clipboard.writeText(window.location.href);
         setShowToast(true);
         setTimeout(() => setShowToast(false), 2500);
     };
 
-    // Загрузка
-    if (storeLoading || userLoading) {
+    // Loading state.
+    if (storeLoading || (token && userLoading)) {
         return (
             <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center">
                 <div className="text-center">
@@ -74,7 +76,7 @@ export default function StoreDetail() {
         );
     }
 
-    // Ошибка
+    // Not found or request error state.
     if (storeError || !store) {
         return (
             <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center">

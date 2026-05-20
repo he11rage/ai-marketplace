@@ -3,6 +3,6 @@ from .models import Category
 from .serializers import CategorySerializer
 
 class CategoryViewSet(viewsets.ModelViewSet):
-    queryset = Category.objects.all()
+    queryset = Category.objects.all().order_by('name')
     serializer_class = CategorySerializer
-    # Пока разрешаем всё (потом закроем правами)
+    # Permissions are intentionally open for now.

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiEndpoints } from '../api/axios';
@@ -9,19 +9,38 @@ export default function Catalog() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const searchQuery = searchParams.get('search')?.trim() || '';
+  const categoryFromQuery = searchParams.get('category')?.trim() || '';
+  const initialCategoryId = categoryFromQuery ? Number(categoryFromQuery) : null;
   const [sort, setSort] = useState('relevance');
+  const [selectedCategoryId, setSelectedCategoryId] = useState(
+    Number.isNaN(initialCategoryId) ? null : initialCategoryId
+  );
+  const [isCategoriesModalOpen, setIsCategoriesModalOpen] = useState(false);
   const orderingBySort = {
+    relevance: 'relevance',
     price_asc: 'price',
     price_desc: '-price',
   };
 
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => apiEndpoints.getCategories().then(res => res.data),
+  });
+
+  const firstCategories = useMemo(() => categories.slice(0, 5), [categories]);
+
   const { data: products, isLoading } = useQuery({
-    queryKey: ['products', { sort, searchQuery }],
+    queryKey: ['products', { sort, searchQuery, selectedCategoryId }],
     queryFn: () => apiEndpoints.getProducts({
       search: searchQuery || undefined,
       ordering: orderingBySort[sort],
+      category: selectedCategoryId || undefined,
     }).then(res => res.data),
   });
+
+  const handleCategoryToggle = (categoryId) => {
+    setSelectedCategoryId(prev => (prev === categoryId ? null : categoryId));
+  };
 
   return (
     <div className="max-w-[1440px] mx-auto px-6 py-8">
@@ -42,13 +61,27 @@ export default function Catalog() {
             <div className="mb-6">
               <h4 className="font-medium text-sm mb-2">Категория</h4>
               <div className="space-y-2">
-                {['Электроника', 'Одежда', 'Дом и сад', 'Спорт'].map(cat => (
-                  <label key={cat} className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input type="checkbox" className="w-4 h-4 rounded border-[#D1D1D6] text-[#007AFF]" />
-                    <span className="text-text-secondary">{cat}</span>
+                {firstCategories.map(category => (
+                  <label key={category.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCategoryId === category.id}
+                      onChange={() => handleCategoryToggle(category.id)}
+                      className="w-4 h-4 rounded border-[#D1D1D6] text-[#007AFF]"
+                    />
+                    <span className="text-text-secondary">{category.name}</span>
                   </label>
                 ))}
               </div>
+              {categories.length > 5 && (
+                <button
+                  type="button"
+                  onClick={() => setIsCategoriesModalOpen(true)}
+                  className="mt-3 text-sm text-[#007AFF] hover:underline"
+                >
+                  Показать больше
+                </button>
+              )}
             </div>
 
             {/* Price Range */}
@@ -71,7 +104,16 @@ export default function Catalog() {
               </div>
             </div>
           </div>
-          <Button variant="secondary" className="w-full">Сбросить</Button>
+          <Button
+            variant="secondary"
+            className="w-full"
+            onClick={() => {
+              setSelectedCategoryId(null);
+              setSort('relevance');
+            }}
+          >
+            Сбросить
+          </Button>
         </aside>
 
         {/* Main Content */}
@@ -113,6 +155,43 @@ export default function Catalog() {
           </div>
         </main>
       </div>
+
+      {isCategoriesModalOpen && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => setIsCategoriesModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-base font-bold">Все категории</h3>
+              <button
+                type="button"
+                onClick={() => setIsCategoriesModalOpen(false)}
+                className="text-sm text-text-secondary hover:text-text-primary"
+              >
+                Закрыть
+              </button>
+            </div>
+
+            <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+              {categories.map(category => (
+                <label key={category.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedCategoryId === category.id}
+                    onChange={() => handleCategoryToggle(category.id)}
+                    className="w-4 h-4 rounded border-[#D1D1D6] text-[#007AFF]"
+                  />
+                  <span className="text-text-secondary">{category.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

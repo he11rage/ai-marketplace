@@ -101,9 +101,9 @@ export default function Wishlist() {
                                 <div className="p-4">
                                     <h3 className="font-semibold text-sm mb-1 truncate">{product.name}</h3>
                                     <div className="flex items-center gap-2 mb-2">
-                                        <span className="text-[#007AFF] font-bold">${product.price}</span>
+                                        <span className="text-[#007AFF] font-bold">{product.price}₽</span>
                                         {product.old_price && (
-                                            <span className="text-xs text-text-secondary line-through">${product.old_price}</span>
+                                            <span className="text-xs text-text-secondary line-through">{product.old_price}₽</span>
                                         )}
                                     </div>
 
@@ -117,7 +117,7 @@ export default function Wishlist() {
                                         }`}
                                         onClick={(e) => handleCartAction(e, product)}
                                     >
-                                        {inCart ? '✓ В корзине' : 'В корзину'}
+                                        {inCart ? 'В корзине' : 'Добавить в корзину'}
                                     </button>
                                 </div>
                             </div>

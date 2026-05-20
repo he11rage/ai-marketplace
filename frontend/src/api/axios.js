@@ -4,10 +4,10 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export const api = axios.create({
     baseURL: API_URL,
-    // НЕ устанавливаем Content-Type по умолчанию - пусть браузер сам решает
+    // Do not set Content-Type globally; let the browser decide.
 });
 
-// Добавляем JWT токен к запросам
+// Attach JWT token to outgoing requests.
 api.interceptors.request.use((config) => {
     const token = localStorage.getItem('access_token');
 
@@ -15,7 +15,7 @@ api.interceptors.request.use((config) => {
         config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // Для FormData НЕ устанавливаем Content-Type - браузер сам установит с boundary
+    // Do not set Content-Type for FormData; browser adds boundary automatically.
     if (!(config.data instanceof FormData)) {
         config.headers['Content-Type'] = 'application/json';
     }
@@ -23,15 +23,15 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-// Обработка истечения токена
+// Handle access-token expiration.
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
     
-    // 🔴 Если 401 и мы ещё не на странице авторизации
+    // Retry once on 401 responses outside auth endpoints.
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // Проверяем что мы не пытаемся получить токен
+      // Skip retry for token endpoints.
       if (originalRequest.url.includes('/auth/jwt/')) {
         return Promise.reject(error);
       }
@@ -42,10 +42,10 @@ api.interceptors.response.use(
         const refreshToken = localStorage.getItem('refresh_token');
         
         if (!refreshToken) {
-          // 🔴 Если нет refresh токена — просто удаляем access и перенаправляем
+          // No refresh token: clear session and redirect to login.
           localStorage.removeItem('access_token');
           if (window.location.pathname !== '/login') {
-            window.location.href = '/login';  // 👈 Перенаправляем на фронтенд /auth
+            window.location.href = '/login';
           }
           return Promise.reject(error);
         }
@@ -60,11 +60,11 @@ api.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${access}`;
         return api(originalRequest);
       } catch (refreshError) {
-        // 🔴 Если refresh не удался — чистим токены и на главную
+        // Refresh failed: clear tokens and return to home.
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
-          window.location.href = '/';  // 👈 На главную, а не на /auth
+          window.location.href = '/';
         }
         return Promise.reject(refreshError);
       }
@@ -74,7 +74,7 @@ api.interceptors.response.use(
   }
 );
 
-// Экспортируем функции для взаимодействия с API
+// API endpoint helpers.
 export const apiEndpoints = {
     // Products
     getProducts: (params = {}) => api.get('/api/products/', { params }),
@@ -104,7 +104,11 @@ export const apiEndpoints = {
 
     // Orders
     getOrders: () => api.get('/api/orders/'),
+    getOrder: (id) => api.get(`/api/orders/${id}/`),
     createOrder: (data) => api.post('/api/orders/', data),
+    cancelOrder: (id) => api.post(`/api/orders/${id}/cancel/`),
+    payOrder: (id) => api.post(`/api/orders/${id}/pay/`),
+    updateOrderDeliveryAddress: (id, data) => api.patch(`/api/orders/${id}/update_delivery_address/`, data),
 
     // Auth (Djoser)
     register: (data) => api.post('/auth/users/', data),

@@ -6,21 +6,23 @@ export default function ProductCard({ product, isOwner = false }) {
     const { toggle, isInWishlist } = useWishlist();
     const liked = isInWishlist(product.id);
     const discount = product.old_price ? Math.round(((product.old_price - product.price) / product.old_price) * 100) : 0;
+    const categoryName = product.category_name || product.category?.name || '';
+    const ratingValue = Number(product.rating ?? 0);
+    const safeRating = Number.isFinite(ratingValue) ? ratingValue : 0;
+    const filledStars = Math.max(0, Math.min(5, Math.round(safeRating)));
 
-    // 1. Клик по карточке — ВСЕГДА ведет на просмотр товара
-    // (чтобы не было конфликтов и случайных переходов в редактор)
+    // Open product details on card click.
     const handleCardClick = () => {
         navigate(`/product/${product.id}`);
     };
 
-    // 2. Клик по кнопке редактирования — ведет в редактор
-    // (доступно только владельцу)
+    // Open edit screen for product owners.
     const handleEditClick = (e) => {
-        e.stopPropagation(); // Останавливаем всплытие, чтобы не сработал клик по карточке
+        e.stopPropagation(); // Prevent triggering card navigation.
         navigate(`/create-product/${product.id}`);
     };
 
-    // 3. Клик по лайку
+    // Toggle wishlist state.
     const handleLikeClick = (e) => {
         e.stopPropagation();
         toggle(product);
@@ -38,7 +40,7 @@ export default function ProductCard({ product, isOwner = false }) {
                     <div className="w-full h-full bg-gradient-to-br from-[#f0f4ff] to-[#e8f0ff]" />
                 )}
                 
-                {/* Кнопка редактирования (только для владельца) */}
+                {/* Edit button for owner. */}
                 {isOwner && (
                     <button 
                         className="absolute top-3 left-3 w-9 h-9 bg-[#007AFF] rounded-full flex items-center justify-center hover:scale-110 transition shadow-md z-20"
@@ -52,7 +54,7 @@ export default function ProductCard({ product, isOwner = false }) {
                     </button>
                 )}
                 
-                {/* Кнопка лайка */}
+                {/* Wishlist button. */}
                 <button 
                     className={`absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 z-20 ${
                         liked 
@@ -79,28 +81,32 @@ export default function ProductCard({ product, isOwner = false }) {
             </div>
             
             <div className="p-4">
+                {categoryName && (
+                    <p className="text-xs text-text-secondary mb-1">{categoryName}</p>
+                )}
+
                 <h3 className="font-semibold text-sm mb-1 truncate">{product.name}</h3>
                 
-                {product.category_name && (
-                    <p className="text-xs text-text-secondary mb-2">{product.category_name}</p>
-                )}
-                
                 <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[#007AFF] font-bold">${product.price}</span>
+                    <span className="text-[#007AFF] font-bold">{product.price}₽</span>
                     {product.old_price && (
-                        <span className="text-xs text-text-secondary line-through">${product.old_price}</span>
+                        <span className="text-xs text-text-secondary line-through">{product.old_price}₽</span>
                     )}
                     {discount > 0 && (
                         <span className="text-[10px] font-bold text-[#FF3B30] bg-[#FF3B30]/10 px-1.5 py-0.5 rounded-md">-{discount}%</span>
                     )}
                 </div>
                 
-                {product.rating && (
-                    <div className="flex items-center gap-1">
-                        <div className="flex text-[#FF9500] text-xs">★★★★★</div>
-                        <span className="text-xs text-text-secondary">({product.review_count || 0})</span>
+                <div className="flex items-center gap-1">
+                    <div className="flex text-xs">
+                        {Array.from({ length: 5 }).map((_, index) => (
+                            <span key={index} className={index < filledStars ? 'text-[#FF9500]' : 'text-[#D1D5DB]'}>
+                                ★
+                            </span>
+                        ))}
                     </div>
-                )}
+                    <span className="text-xs text-text-secondary">{safeRating.toFixed(1)} ({product.review_count || 0})</span>
+                </div>
             </div>
         </div>
     );

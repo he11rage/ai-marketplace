@@ -6,15 +6,15 @@ export default function EmptyState({
   description, 
   actionLabel = "Перейти в каталог", 
   icon = "cart",
-  onAction,  // 👈 Новая пропс для кастомного действия
+  onAction, // Optional custom action callback.
 }) {
   const navigate = useNavigate();
 
   const handleAction = () => {
     if (onAction) {
-      onAction();  // 👈 Если есть onAction — вызываем её
+      onAction();
     } else {
-      navigate('/catalog');  // 👈 Иначе переходим в каталог (по умолчанию)
+      navigate('/catalog');
     }
   };
 

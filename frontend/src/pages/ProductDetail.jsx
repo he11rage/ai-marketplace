@@ -6,6 +6,7 @@ import { useCart } from '../hooks/useCart';
 import { useWishlist } from '../hooks/useWishlist';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
+import ProductCard from '../components/ui/ProductCard';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -20,7 +21,21 @@ export default function ProductDetail() {
     queryFn: () => apiEndpoints.getProduct(id).then(res => res.data),
   });
 
-  // Проверяем, есть ли товар в корзине
+  const productCategoryId = typeof product?.category === 'object'
+    ? product.category?.id
+    : product?.category;
+
+  const { data: relatedProducts = [], isLoading: isRelatedLoading } = useQuery({
+    queryKey: ['related-products', id, productCategoryId],
+    queryFn: () =>
+      apiEndpoints
+        .getProducts({ category: productCategoryId, ordering: 'relevance' })
+        .then((res) => (res.data || []).filter((item) => item.id !== Number(id))),
+    enabled: Boolean(productCategoryId && id),
+  });
+  const visibleRelatedProducts = relatedProducts.slice(0, 4);
+
+  // Check whether product already exists in cart.
   const cartItem = cartItems.find(item => item.id === product?.id);
   const isInCart = !!cartItem;
   const cartQuantity = cartItem?.quantity || 0;
@@ -29,10 +44,10 @@ export default function ProductDetail() {
     if (!product) return;
     
     if (isInCart) {
-      // Если уже в корзине - переходим в корзину
+      // If already in cart, open cart page.
       navigate('/cart');
     } else {
-      // Добавляем с выбранным количеством
+      // Add product with selected quantity.
       addToCart({ ...product, quantity });
     }
   };
@@ -65,10 +80,11 @@ export default function ProductDetail() {
     : 0;
 
   const inWishlist = isInWishlist(product.id);
+  const categoryName = product.category_name || product.category?.name || '';
 
   return (
     <div className="max-w-[1440px] mx-auto px-6 py-8">
-      {/* Навигация */}
+      {/* Breadcrumbs */}
       <div className="flex items-center gap-2 text-sm text-text-secondary mb-6">
         <button onClick={() => navigate(-1)} className="hover:text-text-primary transition">
           ← Назад
@@ -88,7 +104,7 @@ export default function ProductDetail() {
       </div>
 
       <div className="flex gap-8">
-        {/* Галерея изображений */}
+        {/* Image gallery */}
         <div className="flex-1 space-y-4">
           <div className="h-[500px] bg-white rounded-2xl shadow-subtle overflow-hidden">
             {product.image ? (
@@ -109,7 +125,7 @@ export default function ProductDetail() {
             )}
           </div>
           
-          {/* Миниатюры (заглушки для будущих фото) */}
+          {/* Thumbnail placeholders */}
           <div className="grid grid-cols-4 gap-3">
             <div className="h-24 bg-white rounded-xl shadow-subtle cursor-pointer ring-2 ring-[#007AFF] overflow-hidden">
               {product.image && <img src={product.image} alt="" className="w-full h-full object-cover" />}
@@ -120,18 +136,18 @@ export default function ProductDetail() {
           </div>
         </div>
 
-        {/* Информация о товаре */}
+        {/* Product details */}
         <div className="w-[450px]">
           <div className="bg-white rounded-2xl shadow-subtle p-6 sticky top-24 space-y-6">
-            {/* Категория и бейджи */}
+            {/* Category and badges */}
             <div className="flex items-start justify-between">
-              <Badge variant="info">{product.category?.name || 'Категория'}</Badge>
+              <Badge variant="info">{categoryName || 'Без категории'}</Badge>
               {discount > 0 && (
                 <Badge variant="error">-{discount}%</Badge>
               )}
             </div>
 
-            {/* Название */}
+            {/* Product title */}
             <div>
               <h1 className="text-2xl font-bold mb-2">{product.name}</h1>
               {product.brand && (
@@ -139,7 +155,7 @@ export default function ProductDetail() {
               )}
             </div>
 
-            {/* Рейтинг */}
+            {/* Rating section */}
             <div className="flex items-center gap-3">
               <div className="flex text-[#FF9500] text-sm">★★★★★</div>
               <span className="text-sm font-medium">{product.rating || '4.8'}</span>
@@ -148,7 +164,7 @@ export default function ProductDetail() {
               </span>
               {product.stock_quantity > 0 ? (
                 <span className="text-sm text-[#34C759] font-medium ml-auto">
-                  ✓ В наличии ({product.stock_quantity} шт.)
+                  В наличии ({product.stock_quantity} шт.)
                 </span>
               ) : (
                 <span className="text-sm text-[#FF3B30] font-medium ml-auto">
@@ -157,19 +173,19 @@ export default function ProductDetail() {
               )}
             </div>
 
-            {/* Цена */}
+            {/* Price */}
             <div className="flex items-baseline gap-3">
               <span className="text-4xl font-bold text-[#007AFF]">
-                ${parseFloat(product.price).toFixed(2)}
+                {parseFloat(product.price).toFixed(2)}₽
               </span>
               {product.old_price && (
                 <span className="text-xl text-text-secondary line-through">
-                  ${parseFloat(product.old_price).toFixed(2)}
+                  {parseFloat(product.old_price).toFixed(2)}₽
                 </span>
               )}
             </div>
 
-            {/* Описание */}
+            {/* Description */}
             {product.description && (
               <div className="border-t border-[#F2F2F7] pt-4">
                 <h3 className="font-semibold mb-2">Описание</h3>
@@ -179,7 +195,7 @@ export default function ProductDetail() {
               </div>
             )}
 
-            {/* Выбор количества */}
+            {/* Quantity selector */}
             <div className="border-t border-[#F2F2F7] pt-4">
               <label className="block text-sm font-medium text-text-secondary mb-3">
                 Количество
@@ -205,14 +221,14 @@ export default function ProductDetail() {
                 {quantity > 1 && (
                   <span className="text-sm text-text-secondary">
                     Итого: <span className="font-bold text-[#007AFF]">
-                      ${(product.price * quantity).toFixed(2)}
+                      {(product.price * quantity).toFixed(2)}₽
                     </span>
                   </span>
                 )}
               </div>
             </div>
 
-            {/* Кнопки действий */}
+            {/* Action buttons */}
             <div className="flex gap-3 pt-2">
               <button
                 onClick={handleAddToCart}
@@ -225,7 +241,7 @@ export default function ProductDetail() {
               >
                 {isInCart ? (
                   <>
-                    <span>✓ В корзине ({cartQuantity})</span>
+                    <span>В корзине ({cartQuantity})</span>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
                     </svg>
@@ -254,7 +270,7 @@ export default function ProductDetail() {
               </button>
             </div>
 
-            {/* Дополнительная информация */}
+            {/* Additional information */}
             <div className="border-t border-[#F2F2F7] pt-4 space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-text-secondary">Артикул:</span>
@@ -268,14 +284,14 @@ export default function ProductDetail() {
               )}
               <div className="flex justify-between">
                 <span className="text-text-secondary">Доставка:</span>
-                <span className="font-medium text-[#34C759]">Бесплатно от $50</span>
+                <span className="font-medium text-[#34C759]">Бесплатно от 50₽</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Характеристики (если есть) */}
+      {/* Specifications */}
       <div className="mt-12 bg-white rounded-2xl shadow-subtle p-8">
         <h2 className="text-xl font-bold mb-6">Характеристики</h2>
         <div className="grid grid-cols-2 gap-4">
@@ -298,18 +314,40 @@ export default function ProductDetail() {
         </div>
       </div>
 
-      {/* Похожие товары (заглушка) */}
+      {/* Related products */}
       <div className="mt-12">
         <h2 className="text-xl font-bold mb-6">Похожие товары</h2>
-        <div className="grid grid-cols-4 gap-6">
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className="bg-white rounded-2xl shadow-subtle p-4">
-              <div className="h-40 bg-[#F2F2F7] rounded-xl mb-3"></div>
-              <div className="h-4 bg-[#F2F2F7] rounded w-3/4 mb-2"></div>
-              <div className="h-4 bg-[#F2F2F7] rounded w-1/2"></div>
+        {isRelatedLoading ? (
+          <div className="grid grid-cols-4 gap-6">
+            {[1, 2, 3, 4].map((item) => (
+              <div key={item} className="bg-white rounded-2xl shadow-subtle p-4">
+                <div className="h-40 bg-[#F2F2F7] rounded-xl mb-3"></div>
+                <div className="h-4 bg-[#F2F2F7] rounded w-3/4 mb-2"></div>
+                <div className="h-4 bg-[#F2F2F7] rounded w-1/2"></div>
+              </div>
+            ))}
+          </div>
+        ) : relatedProducts.length === 0 ? (
+          <div className="text-text-secondary bg-white rounded-2xl shadow-subtle p-6">
+            Похожего товара не найдено.
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-4 gap-6">
+              {visibleRelatedProducts.map((relatedProduct) => (
+                <ProductCard key={relatedProduct.id} product={relatedProduct} />
+              ))}
             </div>
-          ))}
-        </div>
+            <div className="mt-6 flex justify-center">
+              <Button
+                variant="secondary"
+                onClick={() => navigate(`/catalog?category=${productCategoryId}`)}
+              >
+                Смотреть еще
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

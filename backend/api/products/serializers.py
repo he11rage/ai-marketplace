@@ -1,11 +1,11 @@
 from rest_framework import serializers
 from .models import Product, WishlistItem
-from api.stores.models import Store  # 👈 Импортируем Store
-from api.categories.models import Category  # 👈 Импортируем Category (если есть)
+from api.stores.models import Store
+from api.categories.models import Category
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    # 👇 Простые поля для ID (запись)
+    # Writable relation fields.
     store = serializers.PrimaryKeyRelatedField(queryset=Store.objects.all())
     category = serializers.PrimaryKeyRelatedField(
         queryset=Category.objects.all(), 
@@ -13,7 +13,7 @@ class ProductSerializer(serializers.ModelSerializer):
         allow_null=True
     )
     
-    # 👇 Поля для чтения (отдаём имя категории/магазина)
+    # Read-only labels returned to the client.
     store_name = serializers.CharField(source='store.name', read_only=True)
     category_name = serializers.CharField(source='category.name', read_only=True)
     
@@ -29,7 +29,7 @@ class ProductSerializer(serializers.ModelSerializer):
 
 
 class WishlistItemSerializer(serializers.ModelSerializer):
-    # 👇 Простая информация о продукте для списка избранного
+    # Compact product snapshot for wishlist screens.
     product_id = serializers.IntegerField(source='product.id', read_only=True)
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_price = serializers.DecimalField(source='product.price', max_digits=10, decimal_places=2, read_only=True)
