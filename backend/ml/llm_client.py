@@ -5,104 +5,65 @@ class GigaChatClient:
     def __init__(self):
         self.client = None
         self._initialize_client()
-
+    
     def _initialize_client(self):
-        # Проверяем что загружено
-        print(f"\n🔍 Проверяю переменные окружения:")
-        print(f"   CLIENT_ID: {os.getenv('GIGACHAT_CLIENT_ID', 'НЕ НАЙДЕН')[:20] if os.getenv('GIGACHAT_CLIENT_ID') else 'НЕ НАЙДЕН'}...")
-        print(f"   AUTH_KEY: {os.getenv('GIGACHAT_AUTHORIZATION_KEY', 'НЕ НАЙДЕН')[:20] if os.getenv('GIGACHAT_AUTHORIZATION_KEY') else 'НЕ НАЙДЕН'}...")
-        print(f"   SCOPE: {os.getenv('GIGACHAT_SCOPE', 'НЕ НАЙДЕН')}")
-
         auth_key = os.getenv('GIGACHAT_AUTHORIZATION_KEY')
-
         if not auth_key:
-            print("❌ GIGACHAT_AUTHORIZATION_KEY не найден!")
-            self.client = None
+            print("⚠️ GIGACHAT_AUTHORIZATION_KEY не найден в .env")
             return
-
+            
         try:
             self.client = GigaChat(
                 credentials=auth_key,
-                scope=os.getenv('GIGACHAT_SCOPE', 'GIGACHAT_API_PERS'),
+                scope="GIGACHAT_API_PERS",
                 verify_ssl_certs=False,
             )
             print("✅ GigaChat клиент инициализирован")
         except Exception as e:
             print(f"❌ Ошибка инициализации: {e}")
-            self.client = None
 
-    def generate_response(self, user_query: str, found_products: list, chat_history: list = []) -> str:
-        print(f"\n🤖 Запрос к AI: '{user_query}'")
-        print(f"📦 Найдено товаров: {len(found_products)}")
-
+    def generate_response(self, user_message: str, chat_history: list = None) -> str:
+        """Запрос к LLM с историей диалога"""
         if not self.client:
-            print("❌ GigaChat клиент не инициализирован")
-            return "⚠️ AI-помощник временно недоступен. Проверь настройки."
+            return "⚠️ AI-помощник временно недоступен."
 
-        # Формируем список товаров для контекста
-        if found_products:
-            products_text = "\n".join([
-                f"- {p.get('name', 'Без названия')} ({p.get('brand', 'No brand')}): {p.get('price', 0)}₽"
-                for p in found_products
-            ])
-        else:
-            products_text = "Товары не найдены."
+        # Форматируем историю
+        history_context = ""
+        if chat_history:
+            history_parts = []
+            for msg in chat_history[-10:]:  # Берём последние 10
+                history_parts.append(f"User: {msg['user']}")
+                history_parts.append(f"Assistant: {msg['assistant']}")
+            history_context = "\n".join(history_parts) + "\n"
 
-        # Формируем промпт
-        if found_products:
-            prompt = f"""Ты — дружелюбный и краткий AI-помощник маркетплейса.
+        prompt = f"""Ты — профессиональный ИИ-консультант по продажам на маркетплейсе MarketFlow. 
+        Твоя цель — помочь пользователю сформулировать его идеальный запрос, собрать все требования к товару и подвести к поиску. 
+        Правила ведения диалога: 1. Общайся кратко (1-3 предложения), задавай строго один точечный вопрос за раз. 
+        2. Никогда не игнорируй контекст прошлых сообщений. Если пользователь уже выбрал категорию (например, Электронику), развивай тему внутри этой категории. 
+        Не предлагай товары из других категорий (например, одежду). 
+        3. Веди пользователя по пайплайну: - Сначала пойми конкретный тип устройства/товара (например: монитор, наушники, кресло). 
+        - Затем уточни технические требования или бренд (например: 'механическая клавиатура', '4К монитор'). 
+        - В конце аккуратно спроси про желаемый бюджет. 
+        ОГРАНИЧЕНИЕ: Конкретных товаров в чат пока не выводи. 
+        Если пользователь определился, сделай резюме: «Отлично, ищем [Тип] с характеристиками [Свойства] в бюджете [Цена]. Запускаю поиск?»
 
-Запрос пользователя: "{user_query}"
+История диалога:
+{history_context}
 
-Я нашел {len(found_products)} подходящих товаров:
-{products_text}
+Текущий запрос пользователя: "{user_message}"
 
-Твоя задача:
-1. Дай короткий комментарий (1-2 предложения) о найденных товарах
-2. Упомяни 1-2 лучших варианта, если они есть
-3. Будь полезен и дружелюбен
-4. ОТВЕЧАЙ НА РУССКОМ ЯЗЫКЕ
-5. НЕ используй markdown, звёздочки, решётки
-
-Пример хорошего ответа:
-"Нашёл отличные наушники! Советую присмотреться к Sony — у них лучшее шумоподавление в этой цене."
-
-Твой ответ:"""
-        else:
-            prompt = f"""Ты — дружелюбный AI-помощник маркетплейса.
-
-Пользователь ищет: "{user_query}"
-
-К сожалению, я не нашел подходящих товаров.
-Дай короткий полезный совет (1-2 предложения), что можно сделать:
-- Попробовать другой запрос
-- Посмотреть другие категории
-- Подождать поступления
-
-Отвечай на русском, кратко и по-человечески.
-
-Твой ответ:"""
+Учитывай контекст из истории при ответе.
+Ответ:"""
 
         try:
-            print("📡 Отправляю запрос в GigaChat...")
-            # Вызов API — передаем строку, как требует библиотека
             response = self.client.chat(prompt)
-
-            if response and response.choices and response.choices[0].message:
-                ai_text = response.choices[0].message.content.strip()
-                print(f"✅ Ответ от AI: {ai_text[:100]}...")
-                return ai_text
-            else:
-                print("❌ GigaChat вернул пустой ответ")
-                return "Извините, я не могу сгенерировать ответ прямо сейчас."
-
+            return response.choices[0].message.content.strip()
         except Exception as e:
-            print(f"❌ Ошибка при запросе к GigaChat: {e}")
-            return f"Произошла техническая ошибка. Но я нашел {len(found_products)} товаров — посмотрите их!"
+            print(f"❌ Ошибка GigaChat: {e}")
+            return "Извините, произошла техническая ошибка. Попробуйте позже."
 
-# Глобальный экземпляр клиента
+# Глобальный экземпляр
 gigachat_client = GigaChatClient()
 
-# Обертка для совместимости с views.py
-def generate_ai_response(user_query: str, found_products: list, chat_history: list = []) -> str:
-    return gigachat_client.generate_response(user_query, found_products, chat_history)
+def generate_response(user_message: str, chat_history: list = None) -> str:
+    return gigachat_client.generate_response(user_message, chat_history)

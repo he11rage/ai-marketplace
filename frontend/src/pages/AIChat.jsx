@@ -32,6 +32,10 @@ export default function AIChat() {
       const data = await response.json();
       console.log('📥 Ответ от сервера:', data);
 
+      if (!response.ok) {
+        throw new Error(data.debug_error || data.message || 'Ошибка сервера');
+      }
+
       // AI ответ с текстом (всегда добавляем)
       const aiMsg = {
         id: Date.now() + 1,
@@ -55,7 +59,7 @@ export default function AIChat() {
       console.error('AI Chat error:', error);
       setMessages(prev => [
         ...prev,
-        { id: Date.now() + 1, text: "Произошла ошибка. Попробуйте позже.", sender: 'ai', type: 'text' }
+        { id: Date.now() + 1, text: `Ошибка: ${error.message}`, sender: 'ai', type: 'text' }
       ]);
     } finally {
       setIsLoading(false);
