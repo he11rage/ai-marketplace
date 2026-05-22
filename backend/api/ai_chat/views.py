@@ -1,8 +1,10 @@
+from rest_framework import serializers
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from django.utils import timezone
 from datetime import timedelta
+from drf_spectacular.utils import extend_schema, inline_serializer
 from .models import AIChatHistory
 from ml.llm_client import generate_response
 
@@ -10,6 +12,35 @@ from ml.llm_client import generate_response
 class AIChatView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        tags=["ai"],
+        request=inline_serializer(
+            name="AIChatRequest",
+            fields={"message": serializers.CharField(help_text="User message for the assistant.")},
+        ),
+        responses={
+            200: inline_serializer(
+                name="AIChatResponse",
+                fields={
+                    "message": serializers.CharField(),
+                    "products": serializers.ListField(child=serializers.DictField(), default=[]),
+                    "type": serializers.CharField(default="text_only"),
+                },
+            ),
+            400: inline_serializer(
+                name="AIChatValidationError",
+                fields={"error": serializers.CharField(default="Message is required")},
+            ),
+            500: inline_serializer(
+                name="AIChatServiceError",
+                fields={
+                    "message": serializers.CharField(default="Извините, сервис временно недоступен."),
+                    "products": serializers.ListField(child=serializers.DictField(), default=[]),
+                    "type": serializers.CharField(default="error"),
+                },
+            ),
+        },
+    )
     def post(self, request):
         user_message = request.data.get('message', '').strip()
         if not user_message:

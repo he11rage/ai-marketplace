@@ -4,10 +4,29 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
+from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 from .models import Order, OrderItem
 from .serializers import OrderSerializer
 from api.cart.models import Cart
 
+@extend_schema_view(
+    list=extend_schema(tags=["orders"]),
+    retrieve=extend_schema(tags=["orders"]),
+    create=extend_schema(tags=["orders"]),
+    update=extend_schema(tags=["orders"]),
+    partial_update=extend_schema(tags=["orders"]),
+    destroy=extend_schema(tags=["orders"]),
+    cancel=extend_schema(tags=["orders"], request=None, responses=OrderSerializer),
+    pay=extend_schema(tags=["orders"], request=None, responses=OrderSerializer),
+    update_delivery_address=extend_schema(
+        tags=["orders"],
+        request=inline_serializer(
+            name="OrderUpdateDeliveryAddressRequest",
+            fields={"delivery_address": serializers.CharField()},
+        ),
+        responses=OrderSerializer,
+    ),
+)
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer

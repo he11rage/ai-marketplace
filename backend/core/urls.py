@@ -24,6 +24,8 @@ from django.contrib import admin
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
+from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 MY_APPS = ["users", "stores", "products", "orders", "categories", "cart", "ai_chat"]
 
@@ -36,6 +38,12 @@ for app_label in MY_APPS:
             pass
 
 
+@extend_schema(
+    tags=["api"],
+    responses={
+        200: OpenApiResponse(description="Links to main API resources."),
+    },
+)
 @api_view(["GET"])
 def api_root(request, format=None):
     return Response({
@@ -50,6 +58,9 @@ def api_root(request, format=None):
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
     path("api/", api_root),
     path("api/", include("api.products.urls")),
     path("api/stores/", include("api.stores.urls")),

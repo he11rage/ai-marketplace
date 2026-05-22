@@ -1,4 +1,4 @@
-from rest_framework import viewsets
+from rest_framework import serializers, viewsets
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import PermissionDenied
 from django.db.models import Q, Sum, OuterRef, Subquery, IntegerField, Value
@@ -7,7 +7,26 @@ from .models import Product, WishlistItem
 from .serializers import ProductSerializer, WishlistItemSerializer
 from rest_framework.response import Response
 from rest_framework import status, permissions
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema, extend_schema_view, inline_serializer
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=["products"],
+        parameters=[
+            OpenApiParameter("store", OpenApiTypes.INT, OpenApiParameter.QUERY, description="Filter products by store id."),
+            OpenApiParameter("store_ids", OpenApiTypes.STR, OpenApiParameter.QUERY, description="Comma-separated store ids, for example: 1,2."),
+            OpenApiParameter("stores", OpenApiTypes.STR, OpenApiParameter.QUERY, description="Alias for store_ids."),
+            OpenApiParameter("category", OpenApiTypes.INT, OpenApiParameter.QUERY, description="Filter products by category id."),
+            OpenApiParameter("search", OpenApiTypes.STR, OpenApiParameter.QUERY, description="Search by product, brand, category, or store name."),
+            OpenApiParameter("ordering", OpenApiTypes.STR, OpenApiParameter.QUERY, enum=["price", "-price", "created_at", "-created_at", "popular", "relevance"]),
+        ],
+    ),
+    retrieve=extend_schema(tags=["products"]),
+    create=extend_schema(tags=["products"]),
+    update=extend_schema(tags=["products"]),
+    partial_update=extend_schema(tags=["products"]),
+    destroy=extend_schema(tags=["products"]),
+)
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all().order_by("-created_at")
     serializer_class = ProductSerializer
@@ -99,6 +118,21 @@ class ProductViewSet(viewsets.ModelViewSet):
         product.delete()
 
 
+@extend_schema_view(
+    list=extend_schema(tags=["wishlist"]),
+    retrieve=extend_schema(tags=["wishlist"]),
+    create=extend_schema(
+        tags=["wishlist"],
+        request=inline_serializer(
+            name="WishlistCreateRequest",
+            fields={"product": serializers.IntegerField(help_text="Product id to add to wishlist.")},
+        ),
+        responses={200: WishlistItemSerializer, 201: WishlistItemSerializer},
+    ),
+    update=extend_schema(tags=["wishlist"]),
+    partial_update=extend_schema(tags=["wishlist"]),
+    destroy=extend_schema(tags=["wishlist"]),
+)
 class WishlistViewSet(viewsets.ModelViewSet):
     serializer_class = WishlistItemSerializer
     permission_classes = [permissions.IsAuthenticated]

@@ -1,11 +1,45 @@
-from rest_framework import viewsets, status
+from rest_framework import serializers, viewsets, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 from .models import CartItem, Cart
 from .serializers import CartItemSerializer
 
 
+@extend_schema_view(
+    list=extend_schema(tags=["cart"]),
+    retrieve=extend_schema(tags=["cart"]),
+    create=extend_schema(tags=["cart"]),
+    update=extend_schema(tags=["cart"]),
+    partial_update=extend_schema(tags=["cart"]),
+    destroy=extend_schema(tags=["cart"]),
+    update_selected=extend_schema(
+        tags=["cart"],
+        request=inline_serializer(
+            name="CartUpdateSelectedRequest",
+            fields={
+                "item_ids": serializers.ListField(child=serializers.IntegerField(), help_text="Cart item ids."),
+                "selected": serializers.BooleanField(default=True),
+            },
+        ),
+        responses=inline_serializer(
+            name="CartUpdateSelectedResponse",
+            fields={"status": serializers.CharField(default="updated")},
+        ),
+    ),
+    toggle_all=extend_schema(
+        tags=["cart"],
+        request=inline_serializer(
+            name="CartToggleAllRequest",
+            fields={"select_all": serializers.BooleanField(default=True)},
+        ),
+        responses=inline_serializer(
+            name="CartToggleAllResponse",
+            fields={"status": serializers.CharField(default="toggled")},
+        ),
+    ),
+)
 class CartItemViewSet(viewsets.ModelViewSet):
     queryset = CartItem.objects.all()
     serializer_class = CartItemSerializer
