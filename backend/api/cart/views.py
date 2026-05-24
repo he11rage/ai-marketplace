@@ -45,6 +45,12 @@ class CartItemViewSet(viewsets.ModelViewSet):
     serializer_class = CartItemSerializer
     permission_classes = [IsAuthenticated]
 
+    def validate_stock(self, product, quantity):
+        if product.stock_quantity < quantity:
+            raise serializers.ValidationError({
+                'quantity': f'Недостаточно товара: доступно {product.stock_quantity}.'
+            })
+
     def get_queryset(self):
         return CartItem.objects.filter(cart__user=self.request.user
                                        ).select_related('product', 'cart')
@@ -65,6 +71,11 @@ class CartItemViewSet(viewsets.ModelViewSet):
         existing_items = CartItem.objects.filter(cart=cart, product=product).order_by('id')
         cart_item = existing_items.first()
         created = cart_item is None
+        duplicate_quantity = sum(item.quantity for item in existing_items[1:])
+        current_quantity = cart_item.quantity if cart_item else 0
+        total_quantity = current_quantity + duplicate_quantity + quantity
+
+        self.validate_stock(product, total_quantity)
 
         if created:
             cart_item = CartItem.objects.create(
@@ -74,9 +85,8 @@ class CartItemViewSet(viewsets.ModelViewSet):
                 selected=selected
             )
         else:
-            duplicate_quantity = sum(item.quantity for item in existing_items[1:])
             existing_items.exclude(id=cart_item.id).delete()
-            cart_item.quantity += quantity + duplicate_quantity
+            cart_item.quantity = total_quantity
             cart_item.selected = selected
             cart_item.save(update_fields=['quantity', 'selected'])
 
@@ -85,6 +95,12 @@ class CartItemViewSet(viewsets.ModelViewSet):
             response_serializer.data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
         )
+
+    def perform_update(self, serializer):
+        product = serializer.validated_data.get('product', serializer.instance.product)
+        quantity = serializer.validated_data.get('quantity', serializer.instance.quantity)
+        self.validate_stock(product, quantity)
+        serializer.save()
 
     @action(detail=False, methods=['post'])
     def update_selected(self, request):

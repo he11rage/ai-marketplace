@@ -1,8 +1,9 @@
-from rest_framework import viewsets, permissions
+from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from .models import Store
+from .permissions import IsStoreOwnerOrAdminOrReadOnly
 from .serializers import StoreSerializer
 
 @extend_schema_view(
@@ -21,7 +22,7 @@ from .serializers import StoreSerializer
 class StoreViewSet(viewsets.ModelViewSet):
     queryset = Store.objects.all()
     serializer_class = StoreSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsStoreOwnerOrAdminOrReadOnly]
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)

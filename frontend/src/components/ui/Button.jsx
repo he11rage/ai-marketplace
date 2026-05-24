@@ -1,4 +1,4 @@
-export default function Button({ children, variant = 'primary', size = 'md', className = '', ...props }) {
+export default function Button({ children, type = 'button', variant = 'primary', size = 'md', className = '', ...props }) {
   const base = "rounded-xl font-medium transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 select-none";
   
   const variants = {
@@ -18,7 +18,7 @@ export default function Button({ children, variant = 'primary', size = 'md', cla
   };
 
   return (
-    <button className={`${base} ${variants[variant]} ${sizes[size]} ${className}`} {...props}>
+    <button type={type} className={`${base} ${variants[variant]} ${sizes[size]} ${className}`} {...props}>
       {children}
     </button>
   );

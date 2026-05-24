@@ -239,7 +239,9 @@ export default function ProductDetail() {
                     : 'bg-[#007AFF] text-white hover:bg-[#0066CC]'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
-                {isInCart ? (
+                {product.stock_quantity === 0 ? (
+                  <span>Нет в наличии</span>
+                ) : isInCart ? (
                   <>
                     <span>В корзине ({cartQuantity})</span>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

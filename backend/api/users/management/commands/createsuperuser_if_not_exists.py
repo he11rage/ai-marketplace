@@ -16,8 +16,20 @@ class Command(BaseCommand):
             User.objects.create_superuser(
                 username=username,
                 email=email,
-                password=password
+                password=password,
+                is_admin=True,
             )
             self.stdout.write(self.style.SUCCESS(f'Superuser "{username}" created successfully!'))
         else:
-            self.stdout.write(f'Superuser "{username}" already exists.')
+            user = User.objects.get(username=username)
+            updated_fields = []
+
+            if not user.is_admin:
+                user.is_admin = True
+                updated_fields.append('is_admin')
+
+            if updated_fields:
+                user.save(update_fields=updated_fields)
+                self.stdout.write(self.style.SUCCESS(f'Superuser "{username}" updated successfully!'))
+            else:
+                self.stdout.write(f'Superuser "{username}" already exists.')

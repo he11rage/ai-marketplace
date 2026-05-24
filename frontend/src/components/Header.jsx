@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useCart } from '../hooks/useCart';
+import { apiEndpoints } from '../api/axios';
 
 const SEARCH_DEBOUNCE_MS = 1000;
 
@@ -11,6 +13,13 @@ export default function Header() {
   const token = localStorage.getItem('access_token');
   const searchFromUrl = new URLSearchParams(location.search).get('search') || '';
   const [searchTerm, setSearchTerm] = useState(searchFromUrl);
+  const { data: user } = useQuery({
+    queryKey: ['user'],
+    queryFn: () => apiEndpoints.me().then(res => res.data),
+    enabled: !!token,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+  });
 
   useEffect(() => {
     setSearchTerm(searchFromUrl);
@@ -78,6 +87,19 @@ export default function Header() {
 
         {/* Right-side actions */}
         <div className="flex items-center gap-3">
+          {user?.is_admin && (
+            <button
+              onClick={() => navigate('/admin')}
+              title="Админ-панель"
+              aria-label="Админ-панель"
+              className="w-10 h-10 rounded-full bg-[#007AFF]/10 flex items-center justify-center hover:bg-[#007AFF]/20 transition text-[#007AFF]"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.75c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.305-.209-2.562-.598-3.75A11.959 11.959 0 0 1 12 2.714Z" />
+              </svg>
+            </button>
+          )}
+
           <button onClick={() => navigate(token ? '/account' : '/login')} className="w-10 h-10 rounded-full bg-[#F2F2F7] flex items-center justify-center hover:bg-[#E5E5EA] transition text-text-secondary">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
           </button>

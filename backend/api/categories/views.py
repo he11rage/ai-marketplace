@@ -1,6 +1,7 @@
 from rest_framework import viewsets
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from .models import Category
+from .permissions import IsAdminOrReadOnly
 from .serializers import CategorySerializer
 
 @extend_schema_view(
@@ -14,4 +15,4 @@ from .serializers import CategorySerializer
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all().order_by('name')
     serializer_class = CategorySerializer
-    # Permissions are intentionally open for now.
+    permission_classes = [IsAdminOrReadOnly]

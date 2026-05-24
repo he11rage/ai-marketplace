@@ -10,6 +10,7 @@ class CartItemSerializer(serializers.ModelSerializer):
         queryset=Product.objects.all(),
         write_only=True
     )
+    quantity = serializers.IntegerField(min_value=1, required=False)
 
     class Meta:
         model = CartItem

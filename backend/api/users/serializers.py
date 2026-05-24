@@ -48,11 +48,12 @@ class CustomUserUpdateSerializer(UserSerializer):
             'first_name',
             'last_name',
             'phone',
+            'is_admin',
             'confirmed_owner_items_count',
             'confirmed_owner_items_week_count',
             'confirmed_owner_items_previous_week_count',
         )
-        read_only_fields = ('id', 'username')
+        read_only_fields = ('id', 'username', 'is_admin')
 
     def get_confirmed_owner_items_count(self, obj):
         return self._get_confirmed_owner_income(obj)
