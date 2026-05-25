@@ -21,11 +21,11 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             'id', 'name', 'description', 'price', 'old_price',
-            'brand', 'stock_quantity', 'rating', 'review_count',
+            'brand', 'stock_quantity', 'rating', 'review_count', 'status',
             'image', 'store', 'store_name', 'category', 'category_name',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'rating', 'review_count', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'rating', 'review_count', 'status', 'created_at', 'updated_at']
 
 
 class WishlistItemSerializer(serializers.ModelSerializer):

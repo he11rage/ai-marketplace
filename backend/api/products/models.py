@@ -10,6 +10,22 @@ from ml.embeddings import get_embedding
 class Product(models.Model):
     """Product model with vector embeddings for ML search."""
 
+    STATUS_DRAFT = "draft"
+    STATUS_PENDING_MODERATION = "pending_moderation"
+    STATUS_ACTIVE = "active"
+    STATUS_REJECTED = "rejected"
+    STATUS_BLOCKED = "blocked"
+    STATUS_ARCHIVED = "archived"
+
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, "Draft"),
+        (STATUS_PENDING_MODERATION, "Pending Moderation"),
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_REJECTED, "Rejected"),
+        (STATUS_BLOCKED, "Blocked"),
+        (STATUS_ARCHIVED, "Archived"),
+    ]
+
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="products")
     category = models.ForeignKey(
         Category, on_delete=models.SET_NULL, null=True, related_name="products"
@@ -25,6 +41,11 @@ class Product(models.Model):
     stock_quantity = models.IntegerField(default=0)
     rating = models.DecimalField(max_digits=2, decimal_places=1, default=0.0)
     review_count = models.IntegerField(default=0)
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING_MODERATION,
+    )
     embedding = VectorField(dimensions=1024, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

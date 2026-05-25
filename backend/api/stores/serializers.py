@@ -11,9 +11,9 @@ class StoreSerializer(serializers.ModelSerializer):
         model = Store
         fields = [
             'id', 'owner', 'owner_id', 'name', 'slug', 'description',
-            'logo', 'rating', 'created_at', 'updated_at', 'products_count'
+            'logo', 'rating', 'status', 'created_at', 'updated_at', 'products_count'
         ]
-        read_only_fields = ['owner', 'rating', 'created_at', 'updated_at', 'slug']
+        read_only_fields = ['owner', 'rating', 'status', 'created_at', 'updated_at', 'slug']
     
     def get_products_count(self, obj):
         return obj.products.filter(store=obj).count()

@@ -76,7 +76,7 @@ class CustomUserUpdateSerializer(UserSerializer):
         )
 
         queryset = OrderItem.objects.filter(
-            order__status='confirmed',
+            order__status__in=['paid', 'processing', 'shipped', 'delivered'],
             product__store__owner=user,
         )
 

@@ -47,3 +47,43 @@ class StorePermissionTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.store.refresh_from_db()
         self.assertEqual(self.store.name, "Admin Updated Store")
+
+
+class StoreStatusTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="owner-status", password="pass12345")
+        self.list_url = reverse("store-list")
+
+    def test_store_defaults_to_pending_moderation(self):
+        store = Store.objects.create(owner=self.owner, name="New Store")
+
+        self.assertEqual(store.status, Store.STATUS_PENDING_MODERATION)
+
+    def test_store_status_choices_match_moderation_states(self):
+        self.assertEqual(
+            [choice for choice, _ in Store.STATUS_CHOICES],
+            [
+                Store.STATUS_PENDING_MODERATION,
+                Store.STATUS_ACTIVE,
+                Store.STATUS_LIMITED,
+                Store.STATUS_BLOCKED,
+                Store.STATUS_REJECTED,
+            ],
+        )
+
+    def test_api_create_sets_pending_moderation_status(self):
+        self.client.force_authenticate(self.owner)
+
+        response = self.client.post(
+            self.list_url,
+            {
+                "name": "New Store",
+                "description": "Store waiting for moderation",
+                "status": Store.STATUS_ACTIVE,
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        store = Store.objects.get(id=response.data["id"])
+        self.assertEqual(store.status, Store.STATUS_PENDING_MODERATION)
+        self.assertEqual(response.data["status"], Store.STATUS_PENDING_MODERATION)

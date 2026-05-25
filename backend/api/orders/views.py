@@ -33,6 +33,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
+    CUSTOMER_EDITABLE_STATUSES = {Order.STATUS_CREATED, Order.STATUS_AWAITING_PAYMENT}
 
     def get_queryset(self):
         return Order.objects.filter(buyer=self.request.user).prefetch_related('items')
@@ -74,7 +75,11 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         # Create order with precomputed total.
         payment_method = serializer.validated_data.get('payment_method', 'card')
-        initial_status = 'confirmed' if payment_method == 'cash' else 'created'
+        initial_status = (
+            Order.STATUS_PROCESSING
+            if payment_method == 'cash'
+            else Order.STATUS_AWAITING_PAYMENT
+        )
         order = serializer.save(buyer=user, status=initial_status, total_amount=total_amount)
 
         # Decrease stock and create order line items.
@@ -104,9 +109,9 @@ class OrderViewSet(viewsets.ModelViewSet):
         )
         self.check_object_permissions(request, order)
 
-        if order.status != 'created':
+        if not order.can_transition_to(Order.STATUS_CANCELLED, allow_same=False):
             return Response(
-                {'detail': 'Отменить можно только заказ со статусом created.'},
+                {'detail': Order.status_transition_error(order.status, Order.STATUS_CANCELLED)},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -129,7 +134,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             product.stock_quantity += quantity
             product.save(update_fields=['stock_quantity'])
 
-        order.status = 'cancelled'
+        order.transition_to(Order.STATUS_CANCELLED)
         order.save(update_fields=['status', 'updated_at'])
         return Response(self.get_serializer(order).data)
 
@@ -137,13 +142,13 @@ class OrderViewSet(viewsets.ModelViewSet):
     def pay(self, request, pk=None):
         order = self.get_object()
 
-        if order.status != 'created':
+        if not order.can_transition_to(Order.STATUS_PAID, allow_same=False):
             return Response(
-                {'detail': 'Оплатить можно только заказ со статусом created.'},
+                {'detail': Order.status_transition_error(order.status, Order.STATUS_PAID)},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        order.status = 'confirmed'
+        order.transition_to(Order.STATUS_PAID)
         order.save(update_fields=['status', 'updated_at'])
         return Response(self.get_serializer(order).data)
 
@@ -151,9 +156,9 @@ class OrderViewSet(viewsets.ModelViewSet):
     def update_delivery_address(self, request, pk=None):
         order = self.get_object()
 
-        if order.status != 'created':
+        if order.status not in self.CUSTOMER_EDITABLE_STATUSES:
             return Response(
-                {'detail': 'Изменить адрес можно только для заказа со статусом created.'},
+                {'detail': 'Изменить адрес можно только для заказа со статусом created или awaiting_payment.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 

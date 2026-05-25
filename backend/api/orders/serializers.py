@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import Order, OrderItem
 from datetime import timedelta
 
@@ -33,6 +34,21 @@ class OrderSerializer(serializers.ModelSerializer):
             'estimated_delivery_date',
         ]
         read_only_fields = ['buyer', 'total_amount']
+
+    def validate_status(self, value):
+        if self.instance and not self.instance.can_transition_to(value):
+            raise serializers.ValidationError(
+                Order.status_transition_error(self.instance.status, value)
+            )
+        return value
+
+    def update(self, instance, validated_data):
+        try:
+            return super().update(instance, validated_data)
+        except DjangoValidationError as exc:
+            if hasattr(exc, 'message_dict'):
+                raise serializers.ValidationError(exc.message_dict)
+            raise serializers.ValidationError(exc.messages)
 
     def get_estimated_delivery_date(self, obj):
         if not obj.created_at:

@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
@@ -51,6 +52,7 @@ class OrderStockLockTests(APITestCase):
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock_quantity, 3)
         self.assertEqual(Order.objects.count(), 1)
+        self.assertEqual(Order.objects.get().status, "awaiting_payment")
         self.assertEqual(OrderItem.objects.get().quantity, 2)
         self.assertFalse(CartItem.objects.filter(cart=self.cart).exists())
 
@@ -67,6 +69,48 @@ class OrderStockLockTests(APITestCase):
         self.assertEqual(self.product.stock_quantity, 5)
         self.assertFalse(Order.objects.exists())
         self.assertTrue(CartItem.objects.filter(cart=self.cart).exists())
+
+    def test_card_order_can_be_paid(self):
+        CartItem.objects.create(cart=self.cart, product=self.product, quantity=1)
+        create_response = self.client.post(
+            self.list_url,
+            {"delivery_address": "Moscow, Test street 1", "payment_method": "card"},
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        order = Order.objects.get(id=create_response.data["id"])
+        self.assertEqual(order.status, "awaiting_payment")
+
+        pay_response = self.client.post(reverse("order-pay", args=[order.id]))
+
+        self.assertEqual(pay_response.status_code, status.HTTP_200_OK)
+        order.refresh_from_db()
+        self.assertEqual(order.status, "paid")
+
+    def test_cancelled_order_cannot_be_paid(self):
+        order = Order.objects.create(
+            buyer=self.buyer,
+            total_amount="100.00",
+            status=Order.STATUS_CANCELLED,
+            payment_method="card",
+            delivery_address="Moscow, Test street 1",
+        )
+
+        response = self.client.post(reverse("order-pay", args=[order.id]))
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_CANCELLED)
+
+    def test_cash_order_starts_processing(self):
+        CartItem.objects.create(cart=self.cart, product=self.product, quantity=1)
+
+        response = self.client.post(
+            self.list_url,
+            {"delivery_address": "Moscow, Test street 1", "payment_method": "cash"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Order.objects.get().status, "processing")
 
     def test_checkout_rejects_order_when_product_is_out_of_stock(self):
         CartItem.objects.create(cart=self.cart, product=self.product, quantity=1)
@@ -112,3 +156,70 @@ class OrderStockLockTests(APITestCase):
         self.assertEqual(second_cancel_response.status_code, status.HTTP_400_BAD_REQUEST)
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock_quantity, 5)
+
+    def test_delivered_order_cannot_be_cancelled(self):
+        order = Order.objects.create(
+            buyer=self.buyer,
+            total_amount="100.00",
+            status=Order.STATUS_DELIVERED,
+            payment_method="card",
+            delivery_address="Moscow, Test street 1",
+        )
+
+        response = self.client.post(reverse("order-cancel", args=[order.id]))
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_DELIVERED)
+
+    def test_partial_update_rejects_invalid_status_transition(self):
+        order = Order.objects.create(
+            buyer=self.buyer,
+            total_amount="100.00",
+            status=Order.STATUS_AWAITING_PAYMENT,
+            payment_method="card",
+            delivery_address="Moscow, Test street 1",
+        )
+
+        response = self.client.patch(
+            reverse("order-detail", args=[order.id]),
+            {"status": Order.STATUS_DELIVERED},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_AWAITING_PAYMENT)
+
+    def test_partial_update_allows_valid_status_transition(self):
+        order = Order.objects.create(
+            buyer=self.buyer,
+            total_amount="100.00",
+            status=Order.STATUS_AWAITING_PAYMENT,
+            payment_method="card",
+            delivery_address="Moscow, Test street 1",
+        )
+
+        response = self.client.patch(
+            reverse("order-detail", args=[order.id]),
+            {"status": Order.STATUS_PAID},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_PAID)
+
+    def test_model_rejects_invalid_status_transition_on_save(self):
+        order = Order.objects.create(
+            buyer=self.buyer,
+            total_amount="100.00",
+            status=Order.STATUS_AWAITING_PAYMENT,
+            payment_method="card",
+            delivery_address="Moscow, Test street 1",
+        )
+
+        order.status = Order.STATUS_DELIVERED
+        with self.assertRaises(ValidationError):
+            order.save(update_fields=["status", "updated_at"])
+
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_AWAITING_PAYMENT)

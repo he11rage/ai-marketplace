@@ -8,6 +8,28 @@ import EmptyState from '../components/ui/EmptyState';
 import { useWishlist } from '../hooks/useWishlist';
 import { useCart } from '../hooks/useCart';
 
+const ORDER_STATUS_MAP = {
+    created: { label: 'Создан', variant: 'default' },
+    awaiting_payment: { label: 'Ожидает оплаты', variant: 'warning' },
+    paid: { label: 'Оплачен', variant: 'success' },
+    processing: { label: 'В обработке', variant: 'info' },
+    shipped: { label: 'Отправлен', variant: 'info' },
+    delivered: { label: 'Доставлен', variant: 'success' },
+    cancelled: { label: 'Отменён', variant: 'error' },
+    refunded: { label: 'Возвращён', variant: 'default' },
+};
+
+const STORE_STATUS_MAP = {
+    pending_moderation: { label: 'На модерации', variant: 'warning' },
+    active: { label: 'Активен', variant: 'success' },
+    limited: { label: 'Ограничен', variant: 'warning' },
+    blocked: { label: 'Заблокирован', variant: 'error' },
+    rejected: { label: 'Отклонён', variant: 'error' },
+};
+
+const CUSTOMER_EDITABLE_ORDER_STATUSES = new Set(['created', 'awaiting_payment']);
+const isCustomerEditableOrder = (status) => CUSTOMER_EDITABLE_ORDER_STATUSES.has(status);
+
 export default function Account() {
     const [activeTab, setActiveTab] = useState('dashboard');
     const navigate = useNavigate();
@@ -18,13 +40,14 @@ export default function Account() {
         const requestedTab = location.state?.tab;
         const allowedTabs = ['dashboard', 'orders', 'stores', 'favorites', 'settings'];
 
-        if (requestedTab && allowedTabs.includes(requestedTab)) {
-            setActiveTab(requestedTab);
+        if (requestedTab && allowedTabs.includes(requestedTab) && requestedTab !== activeTab) {
+            const timeoutId = window.setTimeout(() => setActiveTab(requestedTab), 0);
+            return () => window.clearTimeout(timeoutId);
         }
-    }, [location.state]);
+    }, [activeTab, location.state]);
 
     // Load current user profile.
-    const { data: user, isLoading: userLoading } = useQuery({
+    const { data: user } = useQuery({
         queryKey: ['user'],
         queryFn: () => apiEndpoints.me().then(res => res.data),
         enabled: !!token,
@@ -138,7 +161,7 @@ export default function Account() {
             <main className="flex-1">
                 {activeTab === 'dashboard' && <DashboardContent navigate={navigate} user={user} />}
                 {activeTab === 'orders' && <OrdersContent />}
-                {activeTab === 'stores' && <StoresContent navigate={navigate} user={user} />}
+                {activeTab === 'stores' && <StoresContent navigate={navigate} />}
                 {activeTab === 'favorites' && <FavoritesContent />}
                 {activeTab === 'settings' && <SettingsContent />}
             </main>
@@ -164,6 +187,7 @@ function DashboardContent({ navigate, user }) {
     });
 
     const userStores = stores || [];
+    const activeStoresCount = userStores.filter(store => store.status === 'active').length;
 
     const userProducts = products?.filter(product =>
         userStores.some(store => store.id === product.store)
@@ -180,12 +204,7 @@ function DashboardContent({ navigate, user }) {
 
     const lowStockProducts = userProducts.filter(p => (p.stock_quantity || 0) < 5).length;
 
-    const statusMap = {
-        delivered: { label: 'Доставлен', variant: 'success' },
-        processing: { label: 'В обработке', variant: 'info' },
-        pending: { label: 'Ожидает', variant: 'warning' },
-        cancelled: { label: 'Отменён', variant: 'error' },
-    };
+    const statusMap = ORDER_STATUS_MAP;
 
     const isLoading = ordersLoading || storesLoading || productsLoading;
 
@@ -215,7 +234,7 @@ function DashboardContent({ navigate, user }) {
                 </div>
                 <div className="bg-white rounded-xl shadow-subtle p-5">
                     <div className="text-sm text-text-secondary mb-1">Активных магазинов</div>
-                    <div className="text-2xl font-bold">{userStores.length}</div>
+                    <div className="text-2xl font-bold">{activeStoresCount}</div>
                 </div>
                 <div className="bg-white rounded-xl shadow-subtle p-5">
                     <div className="text-sm text-text-secondary mb-1">Доход</div>
@@ -301,11 +320,7 @@ function OrdersContent() {
 
     const productsById = new Map((products || []).map(product => [product.id, product]));
 
-    const statusMap = {
-        created: { label: 'Ожидает оплаты', variant: 'warning' },
-        confirmed: { label: 'Подтвержден', variant: 'info' },
-        cancelled: { label: 'Отменён', variant: 'error' },
-    };
+    const statusMap = ORDER_STATUS_MAP;
     const paymentMethodMap = {
         card: 'Банковская карта',
         sbp: 'СБП',
@@ -374,7 +389,7 @@ function OrdersContent() {
         setActionError('');
     };
 
-    const canManageOrder = selectedOrder?.status === 'created';
+    const canManageOrder = isCustomerEditableOrder(selectedOrder?.status);
 
     if (isLoading) return <div className="p-8 text-center text-text-secondary">Загрузка заказов...</div>;
 
@@ -484,7 +499,7 @@ function OrdersContent() {
                             </div>
                         </div>
 
-                        {selectedOrder.status === 'created' && (
+                        {canManageOrder && (
                             <div className="mb-5 p-4 rounded-xl border border-[#FFE5A3] bg-[#FFF8E6]">
                                 <div className="font-semibold text-[#B26A00] mb-1">Ожидает оплаты</div>
                                 <div className="text-sm text-text-secondary">
@@ -574,7 +589,7 @@ function OrdersContent() {
                             >
                                 Изменить адрес доставки
                             </Button>
-                            {selectedOrder.status === 'created' && (
+                            {canManageOrder && (
                                 <Button
                                     size="sm"
                                     onClick={() => payOrderMutation.mutate(selectedOrder.id)}
@@ -592,7 +607,7 @@ function OrdersContent() {
 }
 
 // Stores tab.
-function StoresContent({ navigate, user }) {
+function StoresContent({ navigate }) {
     const { data: stores, isLoading } = useQuery({
         queryKey: ['my-stores'],
         queryFn: () => apiEndpoints.getMyStores().then(res => res.data),
@@ -629,7 +644,12 @@ function StoresContent({ navigate, user }) {
                                         store.name?.charAt(0).toUpperCase()
                                     )}
                                 </div>
-                                <h3 className="font-bold text-lg mb-1">{store.name}</h3>
+                                <div className="flex items-center justify-between gap-3 mb-1">
+                                    <h3 className="font-bold text-lg">{store.name}</h3>
+                                    <Badge variant={STORE_STATUS_MAP[store.status]?.variant || 'default'}>
+                                        {STORE_STATUS_MAP[store.status]?.label || store.status}
+                                    </Badge>
+                                </div>
                                 <p className="text-xs text-text-secondary mb-3 line-clamp-2">{store.description}</p>
                                 <div className="flex gap-2">
                                     <Button variant="outline" size="sm" className="flex-1" onClick={(e) => { e.stopPropagation(); navigate(`/store/${store.id}`); }}>Открыть</Button>

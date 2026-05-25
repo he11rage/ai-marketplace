@@ -1,14 +1,40 @@
 from django.db import models
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from api.products.models import Product
 
 class Order(models.Model):
     """Customer order."""
+    STATUS_CREATED = 'created'
+    STATUS_AWAITING_PAYMENT = 'awaiting_payment'
+    STATUS_PAID = 'paid'
+    STATUS_PROCESSING = 'processing'
+    STATUS_SHIPPED = 'shipped'
+    STATUS_DELIVERED = 'delivered'
+    STATUS_CANCELLED = 'cancelled'
+    STATUS_REFUNDED = 'refunded'
+
     STATUS_CHOICES = [
-        ('created', 'Created'),
-        ('confirmed', 'Confirmed'),
-        ('cancelled', 'Cancelled'),
+        (STATUS_CREATED, 'Created'),
+        (STATUS_AWAITING_PAYMENT, 'Awaiting Payment'),
+        (STATUS_PAID, 'Paid'),
+        (STATUS_PROCESSING, 'Processing'),
+        (STATUS_SHIPPED, 'Shipped'),
+        (STATUS_DELIVERED, 'Delivered'),
+        (STATUS_CANCELLED, 'Cancelled'),
+        (STATUS_REFUNDED, 'Refunded'),
     ]
+
+    ALLOWED_STATUS_TRANSITIONS = {
+        STATUS_CREATED: {STATUS_AWAITING_PAYMENT, STATUS_PAID, STATUS_CANCELLED},
+        STATUS_AWAITING_PAYMENT: {STATUS_PAID, STATUS_CANCELLED},
+        STATUS_PAID: {STATUS_PROCESSING, STATUS_REFUNDED},
+        STATUS_PROCESSING: {STATUS_SHIPPED},
+        STATUS_SHIPPED: {STATUS_DELIVERED},
+        STATUS_DELIVERED: set(),
+        STATUS_CANCELLED: set(),
+        STATUS_REFUNDED: set(),
+    }
 
     PAYMENT_CHOICES = [
         ('card', 'Bank Card'),
@@ -22,7 +48,7 @@ class Order(models.Model):
         related_name='orders'
     )
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='created')
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_CREATED)
     payment_method = models.CharField(max_length=10, choices=PAYMENT_CHOICES, default='card')
     delivery_address = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
@@ -35,6 +61,36 @@ class Order(models.Model):
 
     def __str__(self):
         return f"Order #{self.id} by {self.buyer.username}"
+
+    @classmethod
+    def is_status_transition_allowed(cls, current_status, target_status, allow_same=True):
+        if current_status == target_status:
+            return allow_same
+        return target_status in cls.ALLOWED_STATUS_TRANSITIONS.get(current_status, set())
+
+    @staticmethod
+    def status_transition_error(current_status, target_status):
+        return f"Недопустимый переход статуса: {current_status} -> {target_status}."
+
+    def can_transition_to(self, target_status, allow_same=True):
+        return self.is_status_transition_allowed(self.status, target_status, allow_same=allow_same)
+
+    def transition_to(self, target_status):
+        if not self.can_transition_to(target_status, allow_same=False):
+            raise ValidationError({'status': self.status_transition_error(self.status, target_status)})
+        self.status = target_status
+
+    def save(self, *args, **kwargs):
+        if self.pk and not self._state.adding:
+            previous_status = type(self).objects.filter(pk=self.pk).values_list('status', flat=True).first()
+            if (
+                previous_status is not None
+                and previous_status != self.status
+                and not self.is_status_transition_allowed(previous_status, self.status)
+            ):
+                raise ValidationError({'status': self.status_transition_error(previous_status, self.status)})
+
+        super().save(*args, **kwargs)
 
 class OrderItem(models.Model):
     """Single order line item."""

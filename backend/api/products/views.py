@@ -101,7 +101,11 @@ class ProductViewSet(viewsets.ModelViewSet):
         if store and store.owner != self.request.user:
             raise PermissionDenied("Вы не можете добавлять товары в чужой магазин.")
         # New products start with zero rating and reviews.
-        serializer.save(rating=0, review_count=0)
+        serializer.save(
+            rating=0,
+            review_count=0,
+            status=Product.STATUS_PENDING_MODERATION,
+        )
 
     def perform_update(self, serializer):
         # Only store owners can update products.
