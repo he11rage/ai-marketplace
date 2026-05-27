@@ -55,3 +55,186 @@ class ProductStatusTests(APITestCase):
         self.assertEqual(product.status, Product.STATUS_PENDING_MODERATION)
         self.assertEqual(response.data["status"], Product.STATUS_PENDING_MODERATION)
         get_embedding_mock.assert_called_once()
+
+
+class ProductCatalogFilterTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="owner", password="pass12345")
+        self.store = Store.objects.create(owner=self.owner, name="Owner Store")
+        self.phones = Category.objects.create(name="Phones")
+        self.laptops = Category.objects.create(name="Laptops")
+        self.list_url = reverse("product-list")
+        self.brands_url = reverse("product-brands")
+
+        Product.objects.create(
+            store=self.store,
+            category=self.phones,
+            name="Budget Phone",
+            description="Cheap phone",
+            price="100.00",
+            brand="Acme",
+            stock_quantity=0,
+            rating="3.0",
+            embedding=[0.0] * 1024,
+        )
+        Product.objects.create(
+            store=self.store,
+            category=self.laptops,
+            name="Pro Laptop",
+            description="Powerful laptop",
+            price="500.00",
+            brand="Globex",
+            stock_quantity=10,
+            rating="4.8",
+            embedding=[0.0] * 1024,
+        )
+        Product.objects.create(
+            store=self.store,
+            category=self.phones,
+            name="Flagship Phone",
+            description="Premium phone",
+            price="300.00",
+            brand="Acme",
+            stock_quantity=3,
+            rating="4.6",
+            embedding=[0.0] * 1024,
+        )
+
+    def test_filter_by_multiple_categories(self):
+        response = self.client.get(
+            self.list_url,
+            {"categories": f"{self.phones.id},{self.laptops.id}"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 3)
+
+    def test_filter_by_price_range(self):
+        response = self.client.get(self.list_url, {"price_min": "200", "price_max": "400"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["name"], "Flagship Phone")
+
+    def test_filter_by_min_rating_and_in_stock(self):
+        response = self.client.get(self.list_url, {"min_rating": "4.5", "in_stock": "true"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        names = {item["name"] for item in response.data}
+        self.assertEqual(names, {"Pro Laptop", "Flagship Phone"})
+
+    def test_filter_by_brands(self):
+        response = self.client.get(self.list_url, {"brands": "Acme"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+        self.assertTrue(all(item["brand"].lower() == "acme" for item in response.data))
+
+    def test_brands_endpoint_returns_distinct_values(self):
+        response = self.client.get(self.brands_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, ["Acme", "Globex"])
+
+    def test_list_without_page_returns_unpaginated_array(self):
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(response.data, list)
+        self.assertEqual(len(response.data), 3)
+
+    def test_list_with_page_returns_paginated_payload(self):
+        response = self.client.get(self.list_url, {"page": 1, "page_size": 2})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("results", response.data)
+        self.assertIn("count", response.data)
+        self.assertEqual(response.data["count"], 3)
+        self.assertEqual(len(response.data["results"]), 2)
+        self.assertIsNotNone(response.data["next"])
+        self.assertIsNone(response.data["previous"])
+
+    def test_list_second_page(self):
+        response = self.client.get(self.list_url, {"page": 2, "page_size": 2})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 3)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertIsNone(response.data["next"])
+        self.assertIsNotNone(response.data["previous"])
+
+
+class ProductCatalogOrderingTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="owner", password="pass12345")
+        self.store = Store.objects.create(owner=self.owner, name="Owner Store")
+        self.category = Category.objects.create(name="Phones")
+        self.list_url = reverse("product-list")
+
+        self.budget_phone = Product.objects.create(
+            store=self.store,
+            category=self.category,
+            name="Budget Phone",
+            price="100.00",
+            description="Cheap phone",
+            rating="3.0",
+            review_count=5,
+            embedding=[0.0] * 1024,
+        )
+        self.flagship_phone = Product.objects.create(
+            store=self.store,
+            category=self.category,
+            name="Flagship Phone",
+            price="500.00",
+            description="Premium phone",
+            rating="4.8",
+            review_count=50,
+            embedding=[0.0] * 1024,
+        )
+        self.mid_phone = Product.objects.create(
+            store=self.store,
+            category=self.category,
+            name="Mid Phone",
+            price="300.00",
+            description="Balanced phone",
+            rating="4.0",
+            review_count=20,
+            embedding=[0.0] * 1024,
+        )
+
+        Product.objects.filter(id=self.budget_phone.id).update(created_at="2024-01-01T00:00:00Z")
+        Product.objects.filter(id=self.mid_phone.id).update(created_at="2024-06-01T00:00:00Z")
+        Product.objects.filter(id=self.flagship_phone.id).update(created_at="2024-12-01T00:00:00Z")
+
+    def _product_names(self, response):
+        return [item["name"] for item in response.data]
+
+    def test_order_by_price_ascending(self):
+        response = self.client.get(self.list_url, {"ordering": "price"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._product_names(response), ["Budget Phone", "Mid Phone", "Flagship Phone"])
+
+    def test_order_by_price_descending(self):
+        response = self.client.get(self.list_url, {"ordering": "-price"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._product_names(response), ["Flagship Phone", "Mid Phone", "Budget Phone"])
+
+    def test_order_by_newest(self):
+        response = self.client.get(self.list_url, {"ordering": "-created_at"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._product_names(response), ["Flagship Phone", "Mid Phone", "Budget Phone"])
+
+    def test_order_by_popularity(self):
+        response = self.client.get(self.list_url, {"ordering": "popular"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._product_names(response)[0], "Flagship Phone")
+
+    def test_order_by_rating(self):
+        response = self.client.get(self.list_url, {"ordering": "-rating"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._product_names(response), ["Flagship Phone", "Mid Phone", "Budget Phone"])

@@ -33,7 +33,9 @@ export default function ProductDetail() {
         .then((res) => (res.data || []).filter((item) => item.id !== Number(id))),
     enabled: Boolean(productCategoryId && id),
   });
-  const visibleRelatedProducts = relatedProducts.slice(0, 4);
+  const RELATED_PRODUCTS_PREVIEW_LIMIT = 4;
+  const visibleRelatedProducts = relatedProducts.slice(0, RELATED_PRODUCTS_PREVIEW_LIMIT);
+  const hasMoreRelatedProducts = relatedProducts.length > RELATED_PRODUCTS_PREVIEW_LIMIT;
 
   // Check whether product already exists in cart.
   const cartItem = cartItems.find(item => item.id === product?.id);
@@ -340,14 +342,16 @@ export default function ProductDetail() {
                 <ProductCard key={relatedProduct.id} product={relatedProduct} />
               ))}
             </div>
-            <div className="mt-6 flex justify-center">
-              <Button
-                variant="secondary"
-                onClick={() => navigate(`/catalog?category=${productCategoryId}`)}
-              >
-                Смотреть еще
-              </Button>
-            </div>
+            {hasMoreRelatedProducts && (
+              <div className="mt-6 flex justify-center">
+                <Button
+                  variant="secondary"
+                  onClick={() => navigate(`/catalog?category=${productCategoryId}`)}
+                >
+                  Показать ещё
+                </Button>
+              </div>
+            )}
           </>
         )}
       </div>

@@ -1,11 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { apiEndpoints } from '../api/axios';
 import ProductCard from '../components/ui/ProductCard';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import EmptyState from '../components/ui/EmptyState';
+import {
+	PRODUCTS_PAGE_SIZE,
+	getPageFromPaginatedUrl,
+	parseProductsResponse,
+} from '../utils/pagination';
 
 export default function Home() {
 	const [view, setView] = useState('products');
@@ -29,18 +34,56 @@ export default function Home() {
 		price_desc: '-price',
 	};
 
-	const { data: products, isLoading: loadingProducts, error: productsError } = useQuery({
-		queryKey: ['products', { productSort, selectedStoreIds }],
-		queryFn: async () => {
-			const params = {};
-			params.ordering = productOrderingBySort[productSort];
+	const loadMoreRef = useRef(null);
+
+	const {
+		data: productsData,
+		isLoading: loadingProducts,
+		isFetchingNextPage,
+		hasNextPage,
+		fetchNextPage,
+		error: productsError,
+	} = useInfiniteQuery({
+		queryKey: ['products', 'home', { productSort, selectedStoreIds }],
+		queryFn: async ({ pageParam = 1 }) => {
+			const params = {
+				ordering: productOrderingBySort[productSort],
+				page: pageParam,
+				page_size: PRODUCTS_PAGE_SIZE,
+			};
 			if (hasSelectedStores) {
 				params.store_ids = selectedStoreIds.join(',');
 			}
 			const res = await apiEndpoints.getProducts(params);
-			return res.data;
+			return parseProductsResponse(res.data);
 		},
+		initialPageParam: 1,
+		getNextPageParam: (lastPage) => getPageFromPaginatedUrl(lastPage.next),
 	});
+
+	const products = useMemo(
+		() => productsData?.pages.flatMap((page) => page.results) ?? [],
+		[productsData]
+	);
+
+	useEffect(() => {
+		const sentinel = loadMoreRef.current;
+		if (!sentinel || view !== 'products') {
+			return undefined;
+		}
+
+		const observer = new IntersectionObserver(
+			(entries) => {
+				if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+					fetchNextPage();
+				}
+			},
+			{ rootMargin: '240px' }
+		);
+
+		observer.observe(sentinel);
+		return () => observer.disconnect();
+	}, [view, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
 	const { data: stores, isLoading: loadingStores, error: storesError } = useQuery({
 		queryKey: ['stores'],
@@ -132,7 +175,17 @@ export default function Home() {
 								/>
 							</div>
 						) : (
-							products.map(product => <ProductCard key={product.id} product={product} />)
+							<>
+								{products.map((product) => (
+									<ProductCard key={product.id} product={product} />
+								))}
+								<div ref={loadMoreRef} className="col-span-4 h-1" aria-hidden="true" />
+								{isFetchingNextPage && (
+									<p className="col-span-4 text-center py-6 text-sm text-text-secondary">
+										Загрузка товаров...
+									</p>
+								)}
+							</>
 						)}
 					</div>
 				) : (

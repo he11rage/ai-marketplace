@@ -1,13 +1,45 @@
+from decimal import Decimal, InvalidOperation
+
 from rest_framework import serializers, viewsets
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.decorators import action
 from django.db.models import Q, Sum, OuterRef, Subquery, IntegerField, Value
 from django.db.models.functions import Coalesce
 from .models import Product, WishlistItem
+from .pagination import OptionalPageNumberPagination
 from .serializers import ProductSerializer, WishlistItemSerializer
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema, extend_schema_view, inline_serializer
+
+
+def _parse_csv_ints(raw):
+    if not raw:
+        return []
+    try:
+        return [int(item.strip()) for item in raw.split(',') if item.strip()]
+    except ValueError:
+        return []
+
+
+def _parse_csv_strings(raw):
+    if not raw:
+        return []
+    return [item.strip() for item in raw.split(',') if item.strip()]
+
+
+def _parse_decimal(raw):
+    if raw in (None, ''):
+        return None
+    try:
+        return Decimal(str(raw).strip().replace(',', '.'))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _is_truthy(raw):
+    return str(raw).strip().lower() in {'1', 'true', 'yes', 'on'}
 
 @extend_schema_view(
     list=extend_schema(
@@ -17,8 +49,22 @@ from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema,
             OpenApiParameter("store_ids", OpenApiTypes.STR, OpenApiParameter.QUERY, description="Comma-separated store ids, for example: 1,2."),
             OpenApiParameter("stores", OpenApiTypes.STR, OpenApiParameter.QUERY, description="Alias for store_ids."),
             OpenApiParameter("category", OpenApiTypes.INT, OpenApiParameter.QUERY, description="Filter products by category id."),
+            OpenApiParameter("categories", OpenApiTypes.STR, OpenApiParameter.QUERY, description="Comma-separated category ids, for example: 1,2,3."),
+            OpenApiParameter("price_min", OpenApiTypes.NUMBER, OpenApiParameter.QUERY, description="Minimum product price."),
+            OpenApiParameter("price_max", OpenApiTypes.NUMBER, OpenApiParameter.QUERY, description="Maximum product price."),
+            OpenApiParameter("min_rating", OpenApiTypes.NUMBER, OpenApiParameter.QUERY, description="Minimum product rating."),
+            OpenApiParameter("in_stock", OpenApiTypes.BOOL, OpenApiParameter.QUERY, description="Only products with stock_quantity > 0."),
+            OpenApiParameter("brand", OpenApiTypes.STR, OpenApiParameter.QUERY, description="Filter by brand (single value or comma-separated list)."),
+            OpenApiParameter("brands", OpenApiTypes.STR, OpenApiParameter.QUERY, description="Comma-separated brand names."),
             OpenApiParameter("search", OpenApiTypes.STR, OpenApiParameter.QUERY, description="Search by product, brand, category, or store name."),
-            OpenApiParameter("ordering", OpenApiTypes.STR, OpenApiParameter.QUERY, enum=["price", "-price", "created_at", "-created_at", "popular", "relevance"]),
+            OpenApiParameter(
+                "ordering",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                enum=["price", "-price", "created_at", "-created_at", "rating", "-rating", "popular", "relevance"],
+            ),
+            OpenApiParameter("page", OpenApiTypes.INT, OpenApiParameter.QUERY, description="Page number (enables paginated response)."),
+            OpenApiParameter("page_size", OpenApiTypes.INT, OpenApiParameter.QUERY, description="Items per page (max 48, default 12)."),
         ],
     ),
     retrieve=extend_schema(tags=["products"]),
@@ -30,10 +76,11 @@ from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema,
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all().order_by("-created_at")
     serializer_class = ProductSerializer
+    pagination_class = OptionalPageNumberPagination
     
     # Public read access, authenticated write access.
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'brands']:
             return [AllowAny()]
         return [IsAuthenticated()]
 
@@ -56,10 +103,41 @@ class ProductViewSet(viewsets.ModelViewSet):
             if store_ids:
                 queryset = queryset.filter(store_id__in=store_ids)
         
-        # Filter by category.
-        category_id = self.request.query_params.get('category')
-        if category_id:
-            queryset = queryset.filter(category_id=category_id)
+        # Filter by category (single or multiple).
+        category_ids = _parse_csv_ints(self.request.query_params.get('categories'))
+        if not category_ids:
+            category_id = self.request.query_params.get('category')
+            if category_id:
+                try:
+                    category_ids = [int(category_id)]
+                except ValueError:
+                    category_ids = []
+        if category_ids:
+            queryset = queryset.filter(category_id__in=category_ids)
+
+        price_min = _parse_decimal(self.request.query_params.get('price_min'))
+        if price_min is not None:
+            queryset = queryset.filter(price__gte=price_min)
+
+        price_max = _parse_decimal(self.request.query_params.get('price_max'))
+        if price_max is not None:
+            queryset = queryset.filter(price__lte=price_max)
+
+        min_rating = _parse_decimal(self.request.query_params.get('min_rating'))
+        if min_rating is not None:
+            queryset = queryset.filter(rating__gte=min_rating)
+
+        if _is_truthy(self.request.query_params.get('in_stock')):
+            queryset = queryset.filter(stock_quantity__gt=0)
+
+        brands = _parse_csv_strings(
+            self.request.query_params.get('brands') or self.request.query_params.get('brand')
+        )
+        if brands:
+            brand_query = Q()
+            for brand_name in brands:
+                brand_query |= Q(brand__iexact=brand_name)
+            queryset = queryset.filter(brand_query)
 
         search = self.request.query_params.get('search')
         if search:
@@ -72,7 +150,9 @@ class ProductViewSet(viewsets.ModelViewSet):
             )
 
         ordering = self.request.query_params.get('ordering')
-        allowed_ordering = {'price', '-price', 'created_at', '-created_at', 'popular', 'relevance'}
+        allowed_ordering = {
+            'price', '-price', 'created_at', '-created_at', 'rating', '-rating', 'popular', 'relevance',
+        }
         if ordering == 'popular':
             store_popularity_subquery = (
                 Product.objects
@@ -94,6 +174,19 @@ class ProductViewSet(viewsets.ModelViewSet):
             queryset = queryset.order_by(ordering)
 
         return queryset
+
+    @extend_schema(tags=["products"], responses={200: {"type": "array", "items": {"type": "string"}}})
+    @action(detail=False, methods=['get'], url_path='brands')
+    def brands(self, request):
+        brand_names = (
+            Product.objects
+            .exclude(brand__isnull=True)
+            .exclude(brand='')
+            .values_list('brand', flat=True)
+            .distinct()
+            .order_by('brand')
+        )
+        return Response(list(brand_names))
 
     def perform_create(self, serializer):
         # Enforce owner-only product creation per store.
