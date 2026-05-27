@@ -27,7 +27,7 @@ from rest_framework.reverse import reverse
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
-MY_APPS = ["users", "stores", "products", "orders", "categories", "cart", "ai_chat"]
+MY_APPS = ["users", "stores", "products", "orders", "categories", "cart", "reviews", "ai_chat"]
 
 for app_label in MY_APPS:
     app_config = apps.get_app_config(app_label)
@@ -67,6 +67,7 @@ urlpatterns = [
     path("api/cart/", include("api.cart.urls")),
     path("api/categories/", include("api.categories.urls")),
     path('api/orders/', include('api.orders.urls')),
+    path("api/reviews/", include("api.reviews.urls")),
     path('api/ai/', include('api.ai_chat.urls')),
     path("auth/", include("djoser.urls")),
     path("auth/", include("djoser.urls.jwt")),

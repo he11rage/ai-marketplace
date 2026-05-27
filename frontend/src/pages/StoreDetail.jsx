@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiEndpoints } from '../api/axios';
@@ -13,6 +13,7 @@ export default function StoreDetail() {
     const token = localStorage.getItem('access_token');
 
     const [showToast, setShowToast] = useState(false);
+    const [isReviewsOpen, setIsReviewsOpen] = useState(false);
 
     // Request store details.
     const { data: store, isLoading: storeLoading, error: storeError } = useQuery({
@@ -38,6 +39,13 @@ export default function StoreDetail() {
         enabled: !!id && !storeError,
     });
 
+    const { data: storeReviewsSummary, isLoading: isStoreReviewsLoading } = useQuery({
+        queryKey: ['store', id, 'reviews-summary'],
+        queryFn: () => apiEndpoints.getStoreReviewsSummary(id, { limit: 10 }).then((res) => res.data),
+        enabled: Boolean(id) && isReviewsOpen,
+        staleTime: 30_000,
+    });
+
     const isOwner = store && currentUser ? store.owner_id === currentUser.id : false;
 
     console.log('Owner check:', {
@@ -53,6 +61,11 @@ export default function StoreDetail() {
         const date = new Date(dateString);
         return date.toLocaleDateString('ru-RU', { year: 'numeric', month: 'long' });
     };
+
+    const storeRatingText = useMemo(() => {
+        const raw = Number(store?.rating);
+        return Number.isFinite(raw) ? raw.toFixed(1) : '0.0';
+    }, [store?.rating]);
 
     // Copy current page URL.
     const handleShare = () => {
@@ -142,8 +155,22 @@ export default function StoreDetail() {
                         </p>
                         <div className="flex items-center gap-4 flex-wrap">
                             <Badge variant="info">
-                                ★ {typeof store.rating === 'number' ? store.rating.toFixed(1) : 'Нет рейтинга'}
+                                ★ {storeRatingText}
                             </Badge>
+                            <button
+                                type="button"
+                                onClick={() => setIsReviewsOpen(true)}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#F2F2F7] hover:bg-[#E5E5EA] transition text-xs text-text-secondary"
+                                title="Открыть отзывы магазина"
+                            >
+                                <span className="font-semibold text-text-primary">
+                                    {Number(store.review_count ?? 0)}
+                                </span>
+                                <span>отзывов</span>
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                                </svg>
+                            </button>
                             <span className="text-xs text-text-secondary">
                                 {store.products_count || products?.length || 0} товаров
                             </span>
@@ -179,6 +206,71 @@ export default function StoreDetail() {
                         </Button>
                     </div>
                 </div>
+
+                {/* Store reviews modal */}
+                {isReviewsOpen && (
+                    <div className="fixed inset-0 z-50 flex items-start justify-center p-6">
+                        <button
+                            type="button"
+                            className="absolute inset-0 bg-black/30"
+                            onClick={() => setIsReviewsOpen(false)}
+                            aria-label="Закрыть отзывы"
+                        />
+                        <div className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden">
+                            <div className="flex items-center justify-between px-6 py-4 border-b border-[#F2F2F7]">
+                                <div>
+                                    <div className="text-lg font-bold">Отзывы магазина</div>
+                                    <div className="text-sm text-text-secondary">
+                                        Всего: <span className="font-semibold text-text-primary">{storeReviewsSummary?.count ?? store.review_count ?? 0}</span>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsReviewsOpen(false)}
+                                    className="w-10 h-10 rounded-full bg-[#F2F2F7] hover:bg-[#E5E5EA] transition flex items-center justify-center text-text-secondary"
+                                    aria-label="Закрыть"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div className="max-h-[70vh] overflow-auto p-6">
+                                {isStoreReviewsLoading ? (
+                                    <div className="text-text-secondary">Загрузка отзывов…</div>
+                                ) : (storeReviewsSummary?.latest?.length || 0) === 0 ? (
+                                    <div className="text-text-secondary">Пока нет отзывов по товарам этого магазина.</div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {storeReviewsSummary.latest.map((r) => (
+                                            <div key={r.id} className="border border-[#F2F2F7] rounded-2xl p-5">
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div className="min-w-0">
+                                                        <div className="font-semibold truncate">
+                                                            {r.author_username || 'Покупатель'}
+                                                        </div>
+                                                        <div className="text-xs text-text-secondary mt-1">
+                                                            Товар: <span className="font-medium text-text-primary">{r.product_name || `#${r.product}`}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-sm text-[#FF9500] font-semibold whitespace-nowrap">
+                                                        ★ {(Number(r.rating) || 0).toFixed(1)}
+                                                    </div>
+                                                </div>
+                                                {r.text && (
+                                                    <div className="mt-3 text-sm text-text-secondary leading-relaxed">
+                                                        {r.text}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Filters */}
                 <div className="flex items-center justify-between mb-6">

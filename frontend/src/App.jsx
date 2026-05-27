@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import Header from './components/Header';
 import Home from './pages/Home';
 import Authorization from './pages/Authorization';
@@ -14,6 +14,7 @@ import StoreDetail from './pages/StoreDetail';
 import Admin from './pages/Admin';
 import AdminRoute from './components/AdminRoute';
 import AuthRoute from './components/AuthRoute';
+import NotFound from './pages/NotFound';
 
 function App() {
   return (
@@ -36,7 +37,7 @@ function App() {
           <Route path="/create-store" element={<AuthRoute><CreateStore /></AuthRoute>} />
           <Route path="/create-store/:id" element={<AuthRoute><CreateStore /></AuthRoute>} />
           <Route path="/store/:id" element={<StoreDetail />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
     </div>

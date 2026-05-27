@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiEndpoints } from '../api/axios';
@@ -8,10 +8,24 @@ import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import ProductCard from '../components/ui/ProductCard';
 
+function renderStars(ratingValue) {
+  const raw = Number(ratingValue);
+  const rating = Number.isFinite(raw) ? raw : 0;
+  const clamped = Math.max(0, Math.min(5, rating));
+  const roundedToHalf = Math.round(clamped * 2) / 2;
+  const full = Math.floor(roundedToHalf);
+  const hasHalf = roundedToHalf - full === 0.5;
+  return '⭐️'.repeat(full) + (hasHalf ? '½' : '');
+}
+
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [quantity, setQuantity] = useState(1);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewText, setReviewText] = useState('');
+  const [reviewError, setReviewError] = useState('');
+  const [reviewSuccess, setReviewSuccess] = useState('');
 
   const { addToCart, items: cartItems } = useCart();
   const { toggle: toggleWishlist, isInWishlist } = useWishlist();
@@ -20,6 +34,19 @@ export default function ProductDetail() {
     queryKey: ['product', id],
     queryFn: () => apiEndpoints.getProduct(id).then(res => res.data),
   });
+
+  const { data: reviews = [], isLoading: isReviewsLoading, refetch: refetchReviews } = useQuery({
+    queryKey: ['reviews', id],
+    queryFn: () => apiEndpoints.getReviews({ product: id }).then((res) => res.data || []),
+    enabled: Boolean(id),
+  });
+
+  const reviewsCount = reviews.length;
+  const averageFromReviews = useMemo(() => {
+    if (!reviewsCount) return null;
+    const sum = reviews.reduce((acc, r) => acc + (Number(r.rating) || 0), 0);
+    return Math.round((sum / reviewsCount) * 10) / 10;
+  }, [reviews, reviewsCount]);
 
   const productCategoryId = typeof product?.category === 'object'
     ? product.category?.id
@@ -61,6 +88,28 @@ export default function ProductDetail() {
     }
   };
 
+  const handleSubmitReview = async () => {
+    setReviewError('');
+    setReviewSuccess('');
+    try {
+      await apiEndpoints.createReview({
+        product: Number(id),
+        rating: Number(reviewRating),
+        text: reviewText,
+      });
+      setReviewSuccess('Отзыв отправлен.');
+      setReviewText('');
+      setReviewRating(5);
+      await refetchReviews();
+    } catch (e) {
+      const msg =
+        e?.response?.data?.product?.[0] ||
+        e?.response?.data?.detail ||
+        'Не удалось отправить отзыв.';
+      setReviewError(msg);
+    }
+  };
+
   if (isLoading) return (
     <div className="max-w-[1440px] mx-auto px-6 py-20 text-center">
       <div className="animate-pulse">
@@ -83,6 +132,9 @@ export default function ProductDetail() {
 
   const inWishlist = isInWishlist(product.id);
   const categoryName = product.category_name || product.category?.name || '';
+  const productRatingValue = Number(product.rating ?? 0) || 0;
+  const productRatingText = productRatingValue.toFixed(1);
+  const productReviewCount = Number(product.review_count ?? reviewsCount) || 0;
 
   return (
     <div className="max-w-[1440px] mx-auto px-6 py-8">
@@ -159,10 +211,12 @@ export default function ProductDetail() {
 
             {/* Rating section */}
             <div className="flex items-center gap-3">
-              <div className="flex text-[#FF9500] text-sm">★★★★★</div>
-              <span className="text-sm font-medium">{product.rating || '4.8'}</span>
+              <div className="flex text-[#FF9500] text-sm">
+                {renderStars(productRatingValue)}
+              </div>
+              <span className="text-sm font-medium">{productRatingText}</span>
               <span className="text-sm text-text-secondary">
-                ({product.review_count || 2456} отзывов)
+                ({productReviewCount} отзывов)
               </span>
               {product.stock_quantity > 0 ? (
                 <span className="text-sm text-[#34C759] font-medium ml-auto">
@@ -309,13 +363,90 @@ export default function ProductDetail() {
           </div>
           <div className="flex justify-between py-3 border-b border-[#F2F2F7]">
             <span className="text-text-secondary">Рейтинг</span>
-            <span className="font-medium">{product.rating || '4.8'} / 5.0</span>
+            <span className="font-medium">{productRatingText} / 5.0</span>
           </div>
           <div className="flex justify-between py-3 border-b border-[#F2F2F7]">
             <span className="text-text-secondary">Отзывов</span>
-            <span className="font-medium">{product.review_count || 0}</span>
+            <span className="font-medium">{productReviewCount}</span>
           </div>
         </div>
+      </div>
+
+      {/* Reviews */}
+      <div className="mt-12 bg-white rounded-2xl shadow-subtle p-8">
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <h2 className="text-xl font-bold">Отзывы</h2>
+          <div className="text-sm text-text-secondary">
+            Средняя оценка: <span className="font-semibold text-text-primary">
+              {productRatingText}
+            </span> · {productReviewCount} шт.
+          </div>
+        </div>
+
+        <div className="border border-[#F2F2F7] rounded-2xl p-5 mb-8">
+          <h3 className="font-semibold mb-4">Оставить отзыв</h3>
+          {reviewError && (
+            <div className="mb-4 text-sm text-[#FF3B30]">{reviewError}</div>
+          )}
+          {reviewSuccess && (
+            <div className="mb-4 text-sm text-[#34C759]">{reviewSuccess}</div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label className="block">
+              <div className="text-sm font-medium text-text-secondary mb-2">Оценка</div>
+              <select
+                value={reviewRating}
+                onChange={(e) => setReviewRating(e.target.value)}
+                className="w-full bg-[#F2F2F7] rounded-xl px-4 py-3 outline-none"
+              >
+                {[5, 4, 3, 2, 1].map((v) => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block md:col-span-2">
+              <div className="text-sm font-medium text-text-secondary mb-2">Текст</div>
+              <textarea
+                value={reviewText}
+                onChange={(e) => setReviewText(e.target.value)}
+                rows={4}
+                className="w-full bg-[#F2F2F7] rounded-xl px-4 py-3 outline-none resize-none"
+                placeholder="Напишите впечатления о товаре"
+              />
+            </label>
+          </div>
+
+          <div className="mt-4">
+            <Button onClick={handleSubmitReview}>Отправить</Button>
+            <div className="mt-2 text-xs text-text-secondary">
+              Отзыв можно оставить только после успешной покупки (проверяется на сервере).
+            </div>
+          </div>
+        </div>
+
+        {isReviewsLoading ? (
+          <div className="text-text-secondary">Загрузка отзывов…</div>
+        ) : reviews.length === 0 ? (
+          <div className="text-text-secondary">Пока нет отзывов.</div>
+        ) : (
+          <div className="space-y-4">
+            {reviews.map((r) => (
+              <div key={r.id} className="border border-[#F2F2F7] rounded-2xl p-5">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="font-semibold">{r.author_username || 'Покупатель'}</div>
+                  <div className="text-[#FF9500] text-sm">{renderStars(r.rating)}</div>
+                </div>
+                {r.text && (
+                  <div className="mt-3 text-sm text-text-secondary leading-relaxed">
+                    {r.text}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Related products */}

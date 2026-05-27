@@ -111,6 +111,12 @@ export const apiEndpoints = {
     payOrder: (id) => api.post(`/api/orders/${id}/pay/`),
     updateOrderDeliveryAddress: (id, data) => api.patch(`/api/orders/${id}/update_delivery_address/`, data),
 
+    // Reviews
+    getReviews: (params = {}) => api.get('/api/reviews/', { params }),
+    getStoreReviewsSummary: (storeId, params = {}) => api.get(`/api/reviews/store/${storeId}/summary/`, { params }),
+    createReview: (data) => api.post('/api/reviews/', data),
+    deleteReview: (id) => api.delete(`/api/reviews/${id}/`),
+
     // Auth (Djoser)
     register: (data) => api.post('/auth/users/', data),
     login: (data) => api.post('/auth/jwt/create/', data),
