@@ -41,6 +41,17 @@ export default function ProductDetail() {
     queryFn: () => apiEndpoints.getProduct(id).then(res => res.data),
   });
 
+  const storeId = typeof product?.store === 'object'
+    ? product.store?.id
+    : product?.store;
+
+  const { data: store } = useQuery({
+    queryKey: ['store', storeId],
+    queryFn: () => apiEndpoints.getStore(storeId).then((res) => res.data),
+    enabled: Boolean(storeId),
+    staleTime: 30_000,
+  });
+
   const { data: reviews = [], isLoading: isReviewsLoading, refetch: refetchReviews } = useQuery({
     queryKey: ['reviews', id],
     queryFn: () => apiEndpoints.getReviews({ product: id }).then((res) => res.data || []),
@@ -160,8 +171,11 @@ export default function ProductDetail() {
   const inWishlist = isInWishlist(product.id);
   const categoryName = product.category_name || product.category?.name || '';
   const productRatingValue = Number(product.rating ?? 0) || 0;
-  const productRatingText = productRatingValue.toFixed(1);
+  const displayedRatingValue = averageFromReviews ?? productRatingValue;
+  const displayedRatingText = (Number(displayedRatingValue) || 0).toFixed(1);
   const productReviewCount = Number(product.review_count ?? reviewsCount) || 0;
+  const storeRatingValue = Number(store?.rating ?? 0) || 0;
+  const storeRatingText = Number.isFinite(storeRatingValue) ? storeRatingValue.toFixed(1) : '0.0';
 
   return (
     <div className="max-w-[1440px] mx-auto px-6 py-8">
@@ -239,9 +253,9 @@ export default function ProductDetail() {
             {/* Rating section */}
             <div className="flex items-center gap-3">
               <div className="flex text-[#FF9500] text-sm">
-                {renderStars(productRatingValue)}
+                {renderStars(displayedRatingValue)}
               </div>
-              <span className="text-sm font-medium">{productRatingText}</span>
+              <span className="text-sm font-medium">{displayedRatingText}</span>
               <span className="text-sm text-text-secondary">
                 ({productReviewCount} отзывов)
               </span>
@@ -372,6 +386,41 @@ export default function ProductDetail() {
                 <span className="font-medium text-[#34C759]">Бесплатно от 50₽</span>
               </div>
             </div>
+
+            {/* Seller block */}
+            {storeId ? (
+              <div className="border-t border-[#F2F2F7] pt-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="text-sm text-text-secondary mb-1">Продавец</div>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/store/${storeId}`)}
+                      className="font-semibold hover:underline truncate"
+                      title="Открыть страницу магазина"
+                    >
+                      {store?.name || product.store_name || `Магазин #${storeId}`}
+                    </button>
+                    <div className="mt-2 flex items-center gap-2 flex-wrap">
+                      {store?.is_verified ? (
+                        <Badge variant="success">Проверенный</Badge>
+                      ) : null}
+                      <Badge variant="info">★ {storeRatingText}</Badge>
+                      <span className="text-xs text-text-secondary">
+                        {Number(store?.review_count ?? 0)} отзывов
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    onClick={() => navigate(`/store/${storeId}`)}
+                    className="shrink-0"
+                  >
+                    К магазину
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -390,7 +439,7 @@ export default function ProductDetail() {
           </div>
           <div className="flex justify-between py-3 border-b border-[#F2F2F7]">
             <span className="text-text-secondary">Рейтинг</span>
-            <span className="font-medium">{productRatingText} / 5.0</span>
+            <span className="font-medium">{displayedRatingText} / 5.0</span>
           </div>
           <div className="flex justify-between py-3 border-b border-[#F2F2F7]">
             <span className="text-text-secondary">Отзывов</span>
@@ -410,7 +459,7 @@ export default function ProductDetail() {
           <h2 className="text-xl font-bold">Отзывы</h2>
           <div className="text-sm text-text-secondary">
             Средняя оценка: <span className="font-semibold text-text-primary">
-              {productRatingText}
+              {displayedRatingText}
             </span> · {productReviewCount} шт.
           </div>
         </div>

@@ -89,7 +89,7 @@ export default function Header() {
         <div className="flex items-center gap-3">
           {user?.is_admin && (
             <button
-              onClick={() => navigate('/admin')}
+              onClick={() => navigate('/admin-panel')}
               title="Админ-панель"
               aria-label="Админ-панель"
               className="w-10 h-10 rounded-full bg-[#007AFF]/10 flex items-center justify-center hover:bg-[#007AFF]/20 transition text-[#007AFF]"

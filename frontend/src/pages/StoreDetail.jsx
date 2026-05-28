@@ -177,6 +177,11 @@ export default function StoreDetail() {
                             {store.description || 'Описание магазина пока не добавлено'}
                         </p>
                         <div className="flex items-center gap-4 flex-wrap">
+                            {store.is_verified ? (
+                                <Badge variant="success">
+                                    Проверенный продавец
+                                </Badge>
+                            ) : null}
                             <Badge variant="info">
                                 ★ {storeRatingText}
                             </Badge>

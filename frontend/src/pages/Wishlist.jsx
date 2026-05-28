@@ -87,6 +87,12 @@ export default function Wishlist() {
                                         <div className="w-full h-full bg-gradient-to-br from-[#f0f4ff] to-[#e8f0ff]" />
                                     )}
 
+                                    {discount > 0 ? (
+                                        <div className="absolute top-3 left-3 px-2 py-1 rounded-full bg-[#FF3B30] text-white text-xs font-bold shadow">
+                                            -{discount}%
+                                        </div>
+                                    ) : null}
+
                                     <button
                                         className="absolute top-3 right-3 w-9 h-9 bg-[#FF3B30] rounded-full flex items-center justify-center hover:scale-110 transition shadow-md cursor-pointer opacity-0 group-hover:opacity-100"
                                         onClick={(e) => handleRemove(e, item.id)}

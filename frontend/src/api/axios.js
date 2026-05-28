@@ -131,6 +131,7 @@ export const apiEndpoints = {
     login: (data) => api.post('/auth/jwt/create/', data),
     refreshToken: (data) => api.post('/auth/jwt/refresh/', data),
     me: () => api.get('/auth/users/me/'),
+    listUsers: (params = {}) => api.get('/auth/users/', { params }),
 
     // User
     updateUser: (data) => api.patch('/auth/users/me/', data),
@@ -139,6 +140,27 @@ export const apiEndpoints = {
     getWishlist: () => api.get('/api/wishlist/'),
     addToWishlist: (data) => api.post('/api/wishlist/', data),
     removeFromWishlist: (id) => api.delete(`/api/wishlist/${id}/`),
+
+    // Moderation (admin)
+    moderationListProducts: (params = {}) => api.get('/api/moderation/products/', { params }),
+    moderationSetProductStatus: (id, data) => api.post(`/api/moderation/products/${id}/set_status/`, data),
+
+    moderationListStores: (params = {}) => api.get('/api/moderation/stores/', { params }),
+    moderationPatchStore: (id, data) => api.patch(`/api/moderation/stores/${id}/`, data),
+    moderationSetStoreStatus: (id, data) => api.post(`/api/moderation/stores/${id}/set_status/`, data),
+
+    moderationListReports: (params = {}) => api.get('/api/moderation/reports/', { params }),
+    moderationResolveReport: (id, data) => api.post(`/api/moderation/reports/${id}/resolve/`, data),
+    moderationRejectReport: (id, data) => api.post(`/api/moderation/reports/${id}/reject/`, data),
+
+    moderationListUsers: (params = {}) => api.get('/api/moderation/users/', { params }),
+    moderationPatchUser: (id, data) => api.patch(`/api/moderation/users/${id}/`, data),
+
+    moderationListOrders: (params = {}) => api.get('/api/moderation/orders/', { params }),
+    moderationSetOrderStatus: (id, data) => api.post(`/api/moderation/orders/${id}/set_status/`, data),
+
+    moderationListAudit: (params = {}) => api.get('/api/moderation/audit/', { params }),
+    moderationListAIHistory: (params = {}) => api.get('/api/moderation/ai-history/', { params }),
 };
 
 export default api;

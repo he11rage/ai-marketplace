@@ -12,6 +12,15 @@ import AIChat from './pages/AIChat';
 import CreateStore from './pages/CreateStore';
 import StoreDetail from './pages/StoreDetail';
 import Admin from './pages/Admin';
+import AdminPanel from './pages/AdminPanel';
+import AdminModerationLayout from './pages/AdminModerationLayout';
+import AdminModerationProducts from './pages/AdminModerationProducts';
+import AdminModerationStores from './pages/AdminModerationStores';
+import AdminModerationOrders from './pages/AdminModerationOrders';
+import AdminModerationReports from './pages/AdminModerationReports';
+import AdminModerationUsers from './pages/AdminModerationUsers';
+import AdminModerationAudit from './pages/AdminModerationAudit';
+import AdminModerationAIHistory from './pages/AdminModerationAIHistory';
 import AdminRoute from './components/AdminRoute';
 import AuthRoute from './components/AuthRoute';
 import NotFound from './pages/NotFound';
@@ -34,6 +43,16 @@ function App() {
           <Route path="/wishlist" element={<Wishlist />} />
           <Route path="/chat" element={<AIChat />} />
           <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
+          <Route path="/admin-panel" element={<AdminRoute><AdminPanel /></AdminRoute>} />
+          <Route path="/admin/moderation" element={<AdminRoute><AdminModerationLayout /></AdminRoute>}>
+            <Route path="products" element={<AdminModerationProducts />} />
+            <Route path="stores" element={<AdminModerationStores />} />
+            <Route path="orders" element={<AdminModerationOrders />} />
+            <Route path="reports" element={<AdminModerationReports />} />
+            <Route path="users" element={<AdminModerationUsers />} />
+            <Route path="audit" element={<AdminModerationAudit />} />
+            <Route path="ai-history" element={<AdminModerationAIHistory />} />
+          </Route>
           <Route path="/create-store" element={<AuthRoute><CreateStore /></AuthRoute>} />
           <Route path="/create-store/:id" element={<AuthRoute><CreateStore /></AuthRoute>} />
           <Route path="/store/:id" element={<StoreDetail />} />

@@ -31,13 +31,24 @@ class Store(models.Model):
     slug = models.SlugField(max_length=255, unique=True)
     description = models.TextField(blank=True, null=True)
     logo = models.ImageField(upload_to='stores/logos/', blank=True, null=True)
+    is_verified = models.BooleanField(default=False)
     rating = models.DecimalField(max_digits=2, decimal_places=1, default=0.0)
+    rating_manual = models.DecimalField(max_digits=2, decimal_places=1, null=True, blank=True)
     review_count = models.IntegerField(default=0)
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default=STATUS_PENDING_MODERATION,
     )
+    moderated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="moderated_stores",
+    )
+    moderated_at = models.DateTimeField(null=True, blank=True)
+    moderation_reason = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -45,6 +56,10 @@ class Store(models.Model):
         if not self.slug:
             self.slug = slugify(self.name)
         super().save(*args, **kwargs)
+
+    @property
+    def rating_effective(self):
+        return self.rating_manual if self.rating_manual is not None else self.rating
 
     @classmethod
     def recalc_store_stats(cls, store_id: int) -> None:

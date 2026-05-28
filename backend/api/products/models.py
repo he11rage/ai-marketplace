@@ -46,6 +46,15 @@ class Product(models.Model):
         choices=STATUS_CHOICES,
         default=STATUS_PENDING_MODERATION,
     )
+    moderated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="moderated_products",
+    )
+    moderated_at = models.DateTimeField(null=True, blank=True)
+    moderation_reason = models.TextField(blank=True, default="")
     embedding = VectorField(dimensions=1024, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
