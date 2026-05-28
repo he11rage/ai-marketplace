@@ -7,6 +7,7 @@ import { useWishlist } from '../hooks/useWishlist';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import ProductCard from '../components/ui/ProductCard';
+import ProductQuestions from '../components/ProductQuestions';
 
 function renderStars(ratingValue) {
   const raw = Number(ratingValue);
@@ -26,6 +27,11 @@ export default function ProductDetail() {
   const [reviewText, setReviewText] = useState('');
   const [reviewError, setReviewError] = useState('');
   const [reviewSuccess, setReviewSuccess] = useState('');
+  const [reportTarget, setReportTarget] = useState(null); // { type, id }
+  const [reportReason, setReportReason] = useState('Спам/мошенничество');
+  const [reportDescription, setReportDescription] = useState('');
+  const [reportError, setReportError] = useState('');
+  const [reportSuccess, setReportSuccess] = useState('');
 
   const { addToCart, items: cartItems } = useCart();
   const { toggle: toggleWishlist, isInWishlist } = useWishlist();
@@ -107,6 +113,27 @@ export default function ProductDetail() {
         e?.response?.data?.detail ||
         'Не удалось отправить отзыв.';
       setReviewError(msg);
+    }
+  };
+
+  const handleSubmitReport = async () => {
+    setReportError('');
+    setReportSuccess('');
+    try {
+      if (!reportTarget) return;
+      const payload = {
+        target_type: reportTarget.type,
+        reason: reportReason,
+        description: reportDescription,
+      };
+      if (reportTarget.type === 'product') payload.product = Number(reportTarget.id);
+      if (reportTarget.type === 'review') payload.review = Number(reportTarget.id);
+      await apiEndpoints.createReport(payload);
+      setReportSuccess('Жалоба отправлена.');
+      setReportDescription('');
+    } catch (e) {
+      const msg = e?.response?.data?.detail || 'Не удалось отправить жалобу.';
+      setReportError(msg);
     }
   };
 
@@ -372,6 +399,11 @@ export default function ProductDetail() {
         </div>
       </div>
 
+      <ProductQuestions
+        productId={id}
+        storeId={typeof product?.store === 'object' ? product.store?.id : product?.store}
+      />
+
       {/* Reviews */}
       <div className="mt-12 bg-white rounded-2xl shadow-subtle p-8">
         <div className="flex items-center justify-between gap-4 mb-6">
@@ -381,6 +413,16 @@ export default function ProductDetail() {
               {productRatingText}
             </span> · {productReviewCount} шт.
           </div>
+        </div>
+
+        <div className="mb-6 flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => setReportTarget({ type: 'product', id })}
+            className="text-sm text-[#FF3B30] hover:underline"
+          >
+            Пожаловаться на товар
+          </button>
         </div>
 
         <div className="border border-[#F2F2F7] rounded-2xl p-5 mb-8">
@@ -436,18 +478,117 @@ export default function ProductDetail() {
               <div key={r.id} className="border border-[#F2F2F7] rounded-2xl p-5">
                 <div className="flex items-center justify-between gap-4">
                   <div className="font-semibold">{r.author_username || 'Покупатель'}</div>
-                  <div className="text-[#FF9500] text-sm">{renderStars(r.rating)}</div>
+                  <div className="flex items-center gap-3">
+                    {r.status === 'pending_moderation' && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-[#F2F2F7] text-text-secondary">
+                        На модерации
+                      </span>
+                    )}
+                    {r.status === 'rejected' && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-[#FF3B30]/10 text-[#FF3B30]">
+                        Отклонён
+                      </span>
+                    )}
+                    <div className="text-[#FF9500] text-sm">{renderStars(r.rating)}</div>
+                  </div>
                 </div>
                 {r.text && (
                   <div className="mt-3 text-sm text-text-secondary leading-relaxed">
                     {r.text}
                   </div>
                 )}
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setReportTarget({ type: 'review', id: r.id })}
+                    className="text-xs text-[#FF3B30] hover:underline"
+                  >
+                    Пожаловаться
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Report modal */}
+      {reportTarget && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-6">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/30"
+            onClick={() => {
+              setReportTarget(null);
+              setReportError('');
+              setReportSuccess('');
+            }}
+            aria-label="Закрыть"
+          />
+          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#F2F2F7]">
+              <div className="text-lg font-bold">Жалоба</div>
+              <button
+                type="button"
+                onClick={() => setReportTarget(null)}
+                className="w-10 h-10 rounded-full bg-[#F2F2F7] hover:bg-[#E5E5EA] transition flex items-center justify-center text-text-secondary"
+                aria-label="Закрыть"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              {reportError && <div className="text-sm text-[#FF3B30]">{reportError}</div>}
+              {reportSuccess && <div className="text-sm text-[#34C759]">{reportSuccess}</div>}
+
+              <label className="block">
+                <div className="text-sm font-medium text-text-secondary mb-2">Причина</div>
+                <select
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                  className="w-full bg-[#F2F2F7] rounded-xl px-4 py-3 outline-none"
+                >
+                  {[
+                    'Спам/мошенничество',
+                    'Оскорбления/ненависть',
+                    'Нецензурная лексика',
+                    'Ложная информация',
+                    'Другое',
+                  ].map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <div className="text-sm font-medium text-text-secondary mb-2">Комментарий</div>
+                <textarea
+                  value={reportDescription}
+                  onChange={(e) => setReportDescription(e.target.value)}
+                  rows={4}
+                  className="w-full bg-[#F2F2F7] rounded-xl px-4 py-3 outline-none resize-none"
+                  placeholder="Опишите, что именно не так"
+                />
+              </label>
+
+              <div className="flex justify-end gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => setReportTarget(null)}
+                >
+                  Отмена
+                </Button>
+                <Button onClick={handleSubmitReport}>Отправить</Button>
+              </div>
+              <div className="text-xs text-text-secondary">
+                Жалобы видны модераторам. Статус рассмотрения можно будет увидеть в будущем в личном кабинете.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Related products */}
       <div className="mt-12">

@@ -18,6 +18,9 @@ class ReviewApiTests(APITestCase):
     def setUp(self):
         self.buyer = User.objects.create_user(username="buyer", password="pass1234")
         self.other = User.objects.create_user(username="other", password="pass1234")
+        self.moderator = User.objects.create_user(
+            username="moderator", password="pass1234", is_staff=True
+        )
 
         store_owner = User.objects.create_user(username="owner", password="pass1234")
         store = Store.objects.create(owner=store_owner, name="Store", description="x")
@@ -60,18 +63,32 @@ class ReviewApiTests(APITestCase):
         url = reverse("review-list")
         resp = self.client.post(url, {"product": self.product.id, "rating": 4, "text": "nice"}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        review_id = resp.data["id"]
 
         # Unique constraint: one per product per author.
         resp2 = self.client.post(url, {"product": self.product.id, "rating": 5, "text": "again"}, format="json")
         self.assertEqual(resp2.status_code, status.HTTP_400_BAD_REQUEST)
 
         self.product.refresh_from_db()
-        self.assertEqual(self.product.review_count, 1)
-        self.assertEqual(str(self.product.rating), "4.0")
+        # New reviews start with pending_moderation => stats shouldn't include them yet.
+        self.assertEqual(self.product.review_count, 0)
+        self.assertEqual(str(self.product.rating), "0.0")
+
+        # Approve review => stats should be updated.
+        self.client.force_authenticate(self.moderator)
+        approve = self.client.post(
+            reverse("review-moderation-approve", args=[review_id]),
+            {"note": "ok"},
+            format="json",
+        )
+        self.assertEqual(approve.status_code, status.HTTP_200_OK)
 
         # Store stats should be updated based on real reviews.
         store = self.product.store
         store.refresh_from_db()
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.review_count, 1)
+        self.assertEqual(str(self.product.rating), "4.0")
         self.assertEqual(store.review_count, 1)
         self.assertEqual(str(store.rating), "4.0")
 
@@ -92,6 +109,15 @@ class ReviewApiTests(APITestCase):
             format="json",
         )
         review_id = create.data["id"]
+
+        # Approve review so it's visible to other users too (otherwise they'd get 404).
+        self.client.force_authenticate(self.moderator)
+        approve = self.client.post(
+            reverse("review-moderation-approve", args=[review_id]),
+            {"note": "ok"},
+            format="json",
+        )
+        self.assertEqual(approve.status_code, status.HTTP_200_OK)
 
         self.client.force_authenticate(self.other)
         del_resp = self.client.delete(reverse("review-detail", args=[review_id]))

@@ -68,6 +68,7 @@ urlpatterns = [
     path("api/categories/", include("api.categories.urls")),
     path('api/orders/', include('api.orders.urls')),
     path("api/reviews/", include("api.reviews.urls")),
+    path("api/reports/", include("api.reports.urls")),
     path('api/ai/', include('api.ai_chat.urls')),
     path("auth/", include("djoser.urls")),
     path("auth/", include("djoser.urls.jwt")),

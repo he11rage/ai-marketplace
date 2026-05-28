@@ -55,7 +55,10 @@ class Store(models.Model):
         # Import here to avoid import cycles.
         from api.reviews.models import Review
 
-        agg = Review.objects.filter(product__store_id=store_id).aggregate(
+        agg = Review.objects.filter(
+            product__store_id=store_id,
+            status=Review.STATUS_APPROVED,
+        ).aggregate(
             avg=Avg("rating"), cnt=Count("id")
         )
         cnt = int(agg["cnt"] or 0)

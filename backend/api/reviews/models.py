@@ -9,6 +9,16 @@ from api.stores.models import Store
 
 
 class Review(models.Model):
+    STATUS_PENDING_MODERATION = "pending_moderation"
+    STATUS_APPROVED = "approved"
+    STATUS_REJECTED = "rejected"
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING_MODERATION, "Pending Moderation"),
+        (STATUS_APPROVED, "Approved"),
+        (STATUS_REJECTED, "Rejected"),
+    ]
+
     product = models.ForeignKey(
         Product, on_delete=models.CASCADE, related_name="reviews"
     )
@@ -17,6 +27,21 @@ class Review(models.Model):
     )
     rating = models.PositiveSmallIntegerField()
     text = models.TextField(blank=True, default="")
+    status = models.CharField(
+        max_length=32,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING_MODERATION,
+        db_index=True,
+    )
+    moderated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="moderated_reviews",
+    )
+    moderated_at = models.DateTimeField(null=True, blank=True)
+    moderation_note = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -34,7 +59,9 @@ class Review(models.Model):
 
     @staticmethod
     def _compute_stats(product_id: int):
-        agg = Review.objects.filter(product_id=product_id).aggregate(
+        agg = Review.objects.filter(
+            product_id=product_id, status=Review.STATUS_APPROVED
+        ).aggregate(
             avg=Avg("rating"), cnt=Count("id")
         )
         cnt = int(agg["cnt"] or 0)

@@ -67,6 +67,72 @@ class Product(models.Model):
         super().save(*args, **kwargs)
 
 
+class ProductQuestion(models.Model):
+    STATUS_OPEN = "open"
+    STATUS_ANSWERED = "answered"
+    STATUS_HIDDEN = "hidden"
+
+    STATUS_CHOICES = [
+        (STATUS_OPEN, "Open"),
+        (STATUS_ANSWERED, "Answered"),
+        (STATUS_HIDDEN, "Hidden"),
+    ]
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="questions")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="product_questions",
+    )
+    guest_name = models.CharField(max_length=120, blank=True, null=True)
+    guest_email = models.EmailField(blank=True, null=True)
+    question = models.TextField()
+    answer = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_OPEN)
+    created_at = models.DateTimeField(auto_now_add=True)
+    answered_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        db_table = "product_questions"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Q{self.pk} for {self.product_id}"
+
+
+class ProductChangeLog(models.Model):
+    ACTION_CREATE = "create"
+    ACTION_UPDATE = "update"
+    ACTION_DELETE = "delete"
+
+    ACTION_CHOICES = [
+        (ACTION_CREATE, "Create"),
+        (ACTION_UPDATE, "Update"),
+        (ACTION_DELETE, "Delete"),
+    ]
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="change_logs")
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="product_change_logs",
+    )
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    changes = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "product_change_logs"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.action} product={self.product_id} at {self.created_at}"
+
+
 class WishlistItem(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, 

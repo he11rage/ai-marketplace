@@ -18,6 +18,10 @@ class ReviewSerializer(serializers.ModelSerializer):
     author_username = serializers.CharField(source="author.username", read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
     store_id = serializers.IntegerField(source="product.store_id", read_only=True)
+    status = serializers.CharField(read_only=True)
+    moderated_by = serializers.IntegerField(source="moderated_by_id", read_only=True)
+    moderated_at = serializers.DateTimeField(read_only=True)
+    moderation_note = serializers.CharField(read_only=True)
 
     class Meta:
         model = Review
@@ -30,6 +34,10 @@ class ReviewSerializer(serializers.ModelSerializer):
             "author_username",
             "rating",
             "text",
+            "status",
+            "moderated_by",
+            "moderated_at",
+            "moderation_note",
             "created_at",
             "updated_at",
         ]

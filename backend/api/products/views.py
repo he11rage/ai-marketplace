@@ -6,9 +6,16 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.decorators import action
 from django.db.models import Q, Sum, OuterRef, Subquery, IntegerField, Value
 from django.db.models.functions import Coalesce
-from .models import Product, WishlistItem
+from django.utils import timezone
+from .models import Product, WishlistItem, ProductQuestion, ProductChangeLog
 from .pagination import OptionalPageNumberPagination
-from .serializers import ProductSerializer, WishlistItemSerializer
+from .serializers import (
+    ProductSerializer,
+    WishlistItemSerializer,
+    ProductQuestionSerializer,
+    ProductQuestionAnswerSerializer,
+    ProductChangeLogSerializer,
+)
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema, extend_schema_view, inline_serializer
@@ -80,7 +87,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     
     # Public read access, authenticated write access.
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'brands']:
+        if self.action in ['list', 'retrieve', 'brands', 'questions', 'create_question']:
             return [AllowAny()]
         return [IsAuthenticated()]
 
@@ -194,10 +201,16 @@ class ProductViewSet(viewsets.ModelViewSet):
         if store and store.owner != self.request.user:
             raise PermissionDenied("Вы не можете добавлять товары в чужой магазин.")
         # New products start with zero rating and reviews.
-        serializer.save(
+        product = serializer.save(
             rating=0,
             review_count=0,
             status=Product.STATUS_PENDING_MODERATION,
+        )
+        ProductChangeLog.objects.create(
+            product=product,
+            changed_by=self.request.user,
+            action=ProductChangeLog.ACTION_CREATE,
+            changes={"snapshot": ProductSerializer(product, context={"request": self.request}).data},
         )
 
     def perform_update(self, serializer):
@@ -205,14 +218,116 @@ class ProductViewSet(viewsets.ModelViewSet):
         product = self.get_object()
         if product.store.owner != self.request.user:
             raise PermissionDenied("Вы не можете редактировать чужие товары.")
-        serializer.save()
+        original = getattr(product, "_original_for_audit", None)
+        updated = serializer.save()
+
+        tracked_fields = [
+            "name",
+            "description",
+            "price",
+            "old_price",
+            "brand",
+            "image",
+            "stock_quantity",
+            "category_id",
+            "status",
+        ]
+        changes = {}
+        if original is not None:
+            for f in tracked_fields:
+                before = getattr(original, f, None)
+                after = getattr(updated, f, None)
+                if str(before) != str(after):
+                    changes[f] = {"from": str(before) if before is not None else None, "to": str(after) if after is not None else None}
+        else:
+            changes["note"] = "original_snapshot_unavailable"
+
+        if changes:
+            ProductChangeLog.objects.create(
+                product=updated,
+                changed_by=self.request.user,
+                action=ProductChangeLog.ACTION_UPDATE,
+                changes=changes,
+            )
 
     def perform_destroy(self, serializer):
         # Only store owners can delete products.
         product = self.get_object()
         if product.store.owner != self.request.user:
             raise PermissionDenied("Вы не можете удалять чужие товары.")
+        ProductChangeLog.objects.create(
+            product=product,
+            changed_by=self.request.user,
+            action=ProductChangeLog.ACTION_DELETE,
+            changes={"snapshot": ProductSerializer(product, context={"request": self.request}).data},
+        )
         product.delete()
+
+    @extend_schema(
+        tags=["product_questions"],
+        responses={200: ProductQuestionSerializer(many=True)},
+    )
+    @action(detail=True, methods=["get"], permission_classes=[AllowAny], url_path="questions")
+    def questions(self, request, pk=None):
+        product = self.get_object()
+        qs = ProductQuestion.objects.filter(product=product).exclude(status=ProductQuestion.STATUS_HIDDEN)
+        return Response(ProductQuestionSerializer(qs, many=True, context={"request": request}).data)
+
+    @extend_schema(
+        tags=["product_questions"],
+        request=ProductQuestionSerializer,
+        responses={201: ProductQuestionSerializer},
+    )
+    @questions.mapping.post
+    def create_question(self, request, pk=None):
+        product = self.get_object()
+        serializer = ProductQuestionSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        obj = ProductQuestion.objects.create(
+            product=product,
+            user=request.user if request.user.is_authenticated else None,
+            guest_name=serializer.validated_data.get("guest_name"),
+            guest_email=serializer.validated_data.get("guest_email"),
+            question=serializer.validated_data["question"],
+            status=ProductQuestion.STATUS_OPEN,
+        )
+        return Response(ProductQuestionSerializer(obj, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        tags=["product_questions"],
+        request=ProductQuestionAnswerSerializer,
+        responses={200: ProductQuestionSerializer},
+    )
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated], url_path=r"questions/(?P<question_id>\d+)/answer")
+    def answer_question(self, request, pk=None, question_id=None):
+        product = self.get_object()
+        if product.store.owner != request.user:
+            raise PermissionDenied("Вы не можете отвечать на вопросы к чужим товарам.")
+
+        try:
+            q = ProductQuestion.objects.get(pk=question_id, product=product)
+        except ProductQuestion.DoesNotExist:
+            return Response({"detail": "Question not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        payload = ProductQuestionAnswerSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        q.answer = payload.validated_data["answer"]
+        q.status = ProductQuestion.STATUS_ANSWERED
+        q.answered_at = timezone.now()
+        q.save(update_fields=["answer", "status", "answered_at"])
+        return Response(ProductQuestionSerializer(q, context={"request": request}).data)
+
+    @extend_schema(
+        tags=["product_history"],
+        responses={200: ProductChangeLogSerializer(many=True)},
+    )
+    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated], url_path="history")
+    def history(self, request, pk=None):
+        product = self.get_object()
+        if product.store.owner != request.user:
+            raise PermissionDenied("История изменений доступна только владельцу товара.")
+        logs = ProductChangeLog.objects.filter(product=product).order_by("-created_at")
+        return Response(ProductChangeLogSerializer(logs, many=True, context={"request": request}).data)
 
 
 @extend_schema_view(

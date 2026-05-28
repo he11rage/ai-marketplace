@@ -84,6 +84,11 @@ export const apiEndpoints = {
     updateProduct: (id, data) => api.patch(`/api/products/${id}/`, data),  // FormData
     deleteProduct: (id) => api.delete(`/api/products/${id}/`),
 
+    // Product questions
+    getProductQuestions: (id) => api.get(`/api/products/${id}/questions/`),
+    createProductQuestion: (id, data) => api.post(`/api/products/${id}/questions/`, data),
+    answerProductQuestion: (id, questionId, data) => api.post(`/api/products/${id}/questions/${questionId}/answer/`, data),
+
     // Stores
     getStores: () => api.get('/api/stores/'),
     getMyStores: () => api.get('/api/stores/my_stores/'),
@@ -116,6 +121,10 @@ export const apiEndpoints = {
     getStoreReviewsSummary: (storeId, params = {}) => api.get(`/api/reviews/store/${storeId}/summary/`, { params }),
     createReview: (data) => api.post('/api/reviews/', data),
     deleteReview: (id) => api.delete(`/api/reviews/${id}/`),
+
+    // Reports
+    createReport: (data) => api.post('/api/reports/', data),
+    getMyReports: (params = {}) => api.get('/api/reports/', { params }),
 
     // Auth (Djoser)
     register: (data) => api.post('/auth/users/', data),

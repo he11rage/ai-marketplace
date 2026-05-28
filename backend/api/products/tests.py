@@ -238,3 +238,58 @@ class ProductCatalogOrderingTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(self._product_names(response), ["Flagship Phone", "Mid Phone", "Budget Phone"])
+
+
+class ProductQuestionsAndHistoryTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="owner2", password="pass12345")
+        self.other_user = User.objects.create_user(username="other", password="pass12345")
+        self.store = Store.objects.create(owner=self.owner, name="Owner Store 2")
+        self.category = Category.objects.create(name="Accessories")
+        self.product = Product.objects.create(
+            store=self.store,
+            category=self.category,
+            name="Case",
+            description="Phone case",
+            price="10.00",
+            stock_quantity=5,
+            embedding=[0.0] * 1024,
+        )
+
+    def test_can_create_question_anonymously(self):
+        url = reverse("product-questions", kwargs={"pk": self.product.id})
+        resp = self.client.post(
+            url,
+            {"question": "Есть ли гарантия?", "guest_name": "Иван"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resp.data["question"], "Есть ли гарантия?")
+
+    def test_owner_can_answer_question(self):
+        q_url = reverse("product-questions", kwargs={"pk": self.product.id})
+        q_resp = self.client.post(q_url, {"question": "Какие цвета?", "guest_email": "a@b.com"}, format="json")
+        self.assertEqual(q_resp.status_code, status.HTTP_201_CREATED)
+        qid = q_resp.data["id"]
+
+        self.client.force_authenticate(self.owner)
+        ans_url = reverse("product-answer-question", kwargs={"pk": self.product.id, "question_id": qid})
+        ans_resp = self.client.post(ans_url, {"answer": "Чёрный и прозрачный"}, format="json")
+        self.assertEqual(ans_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(ans_resp.data["status"], "answered")
+        self.assertEqual(ans_resp.data["answer"], "Чёрный и прозрачный")
+
+    def test_history_visible_only_to_owner(self):
+        self.client.force_authenticate(self.owner)
+        update_url = reverse("product-detail", kwargs={"pk": self.product.id})
+        resp = self.client.patch(update_url, {"price": "12.00"}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        history_url = reverse("product-history", kwargs={"pk": self.product.id})
+        hist = self.client.get(history_url)
+        self.assertEqual(hist.status_code, status.HTTP_200_OK)
+        self.assertTrue(len(hist.data) >= 1)
+
+        self.client.force_authenticate(self.other_user)
+        denied = self.client.get(history_url)
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
