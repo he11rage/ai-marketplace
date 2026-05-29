@@ -161,6 +161,25 @@ export const apiEndpoints = {
 
     moderationListAudit: (params = {}) => api.get('/api/moderation/audit/', { params }),
     moderationListAIHistory: (params = {}) => api.get('/api/moderation/ai-history/', { params }),
+
+    // Seller cabinet
+    sellerListProducts: (params = {}) => api.get('/api/seller/products/', { params }),
+    sellerGetProduct: (id) => api.get(`/api/seller/products/${id}/`),
+    sellerCreateProduct: (data) => api.post('/api/seller/products/', data),
+    sellerUpdateProduct: (id, data) => api.patch(`/api/seller/products/${id}/`, data),
+    sellerSubmitProduct: (id) => api.post(`/api/seller/products/${id}/submit/`),
+    sellerArchiveProduct: (id) => api.post(`/api/seller/products/${id}/archive/`),
+    sellerHideProduct: (id) => api.post(`/api/seller/products/${id}/hide/`),
+    sellerRestoreProduct: (id) => api.post(`/api/seller/products/${id}/restore/`),
+
+    sellerListOrders: (params = {}) => api.get('/api/seller/orders/', { params }),
+    sellerGetOrder: (id) => api.get(`/api/seller/orders/${id}/`),
+    sellerSetOrderStatus: (id, data) => api.post(`/api/seller/orders/${id}/set_status/`, data),
+
+    sellerAnalyticsOverview: (params = {}) => api.get('/api/seller/analytics/overview/', { params }),
+    sellerAnalyticsProducts: (params = {}) => api.get('/api/seller/analytics/products/', { params }),
+    sellerAnalyticsLowStock: (params = {}) => api.get('/api/seller/analytics/low-stock/', { params }),
+    sellerAnalyticsQuality: (params = {}) => api.get('/api/seller/analytics/quality/', { params }),
 };
 
 export default api;

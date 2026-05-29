@@ -7,6 +7,7 @@ import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import { useWishlist } from '../hooks/useWishlist';
 import { useCart } from '../hooks/useCart';
+import { getRoleLabel, isAdmin, isSeller } from '../utils/roles';
 
 const ORDER_STATUS_MAP = {
     created: { label: 'Создан', variant: 'default' },
@@ -38,7 +39,7 @@ export default function Account() {
 
     useEffect(() => {
         const requestedTab = location.state?.tab;
-        const allowedTabs = ['dashboard', 'orders', 'stores', 'favorites', 'settings'];
+        const allowedTabs = ['dashboard', 'orders', ...(isSeller(user) ? ['stores'] : []), 'favorites', 'settings'];
 
         if (requestedTab && allowedTabs.includes(requestedTab) && requestedTab !== activeTab) {
             const timeoutId = window.setTimeout(() => setActiveTab(requestedTab), 0);
@@ -105,10 +106,12 @@ export default function Account() {
         return 'Пользователь';
     };
 
+    const showSellerTabs = isSeller(user);
+
     const tabs = [
         { id: 'dashboard', label: 'Обзор' },
         { id: 'orders', label: 'Заказы' },
-        { id: 'stores', label: 'Магазины' },
+        ...(showSellerTabs ? [{ id: 'stores', label: 'Магазины' }] : []),
         { id: 'favorites', label: 'Избранное' },
         { id: 'settings', label: 'Настройки' },
     ];
@@ -125,7 +128,8 @@ export default function Account() {
                         <div>
                             <div className="font-semibold text-sm">{getUserName()}</div>
                             <div className="text-xs text-text-secondary">
-                                {user?.is_admin ? 'Администратор' : 'Покупатель'}
+                                {getRoleLabel(user?.role)}
+                                {isAdmin(user) && user?.role !== 'admin' ? ' (модератор)' : ''}
                             </div>
                         </div>
                     </div>
@@ -159,7 +163,7 @@ export default function Account() {
 
             {/* Content */}
             <main className="flex-1">
-                {activeTab === 'dashboard' && <DashboardContent navigate={navigate} user={user} />}
+                {activeTab === 'dashboard' && <DashboardContent navigate={navigate} user={user} showSellerStats={showSellerTabs} />}
                 {activeTab === 'orders' && <OrdersContent />}
                 {activeTab === 'stores' && <StoresContent navigate={navigate} />}
                 {activeTab === 'favorites' && <FavoritesContent />}
@@ -170,7 +174,7 @@ export default function Account() {
 }
 
 // Dashboard tab.
-function DashboardContent({ navigate, user }) {
+function DashboardContent({ navigate, user, showSellerStats }) {
     const { data: orders, isLoading: ordersLoading } = useQuery({
         queryKey: ['orders'],
         queryFn: () => apiEndpoints.getOrders().then(res => res.data),
@@ -179,23 +183,27 @@ function DashboardContent({ navigate, user }) {
     const { data: stores, isLoading: storesLoading } = useQuery({
         queryKey: ['my-stores-dashboard'],
         queryFn: () => apiEndpoints.getMyStores().then(res => res.data),
+        enabled: showSellerStats,
     });
 
     const { data: products, isLoading: productsLoading } = useQuery({
         queryKey: ['products'],
         queryFn: () => apiEndpoints.getProducts().then(res => res.data),
+        enabled: showSellerStats,
     });
 
-    const userStores = stores || [];
+    const userStores = showSellerStats ? (stores || []) : [];
     const activeStoresCount = userStores.filter(store => store.status === 'active').length;
 
-    const userProducts = products?.filter(product =>
-        userStores.some(store => store.id === product.store)
-    ) || [];
+    const userProducts = showSellerStats
+        ? (products?.filter(product =>
+            userStores.some(store => store.id === product.store)
+        ) || [])
+        : [];
 
-    const confirmedOwnerIncome = Number(user?.confirmed_owner_items_count || 0);
-    const currentWeekIncome = Number(user?.confirmed_owner_items_week_count || 0);
-    const previousWeekIncome = Number(user?.confirmed_owner_items_previous_week_count || 0);
+    const confirmedOwnerIncome = showSellerStats ? Number(user?.confirmed_owner_items_count || 0) : 0;
+    const currentWeekIncome = showSellerStats ? Number(user?.confirmed_owner_items_week_count || 0) : 0;
+    const previousWeekIncome = showSellerStats ? Number(user?.confirmed_owner_items_previous_week_count || 0) : 0;
     const weeklyIncomeGrowth = previousWeekIncome === 0
         ? (currentWeekIncome > 0 ? 100 : 0)
         : ((currentWeekIncome - previousWeekIncome) / previousWeekIncome) * 100;
@@ -206,7 +214,7 @@ function DashboardContent({ navigate, user }) {
 
     const statusMap = ORDER_STATUS_MAP;
 
-    const isLoading = ordersLoading || storesLoading || productsLoading;
+    const isLoading = ordersLoading || (showSellerStats && (storesLoading || productsLoading));
 
     if (isLoading) {
         return (
@@ -227,29 +235,33 @@ function DashboardContent({ navigate, user }) {
 
     return (
         <div className="space-y-6 animate-fade">
-            <div className="grid grid-cols-4 gap-4">
+            <div className={`grid gap-4 ${showSellerStats ? 'grid-cols-4' : 'grid-cols-1 max-w-sm'}`}>
                 <div className="bg-white rounded-xl shadow-subtle p-5">
                     <div className="text-sm text-text-secondary mb-1">Всего заказов</div>
                     <div className="text-2xl font-bold">{orders?.length || 0}</div>
                 </div>
-                <div className="bg-white rounded-xl shadow-subtle p-5">
-                    <div className="text-sm text-text-secondary mb-1">Активных магазинов</div>
-                    <div className="text-2xl font-bold">{activeStoresCount}</div>
-                </div>
-                <div className="bg-white rounded-xl shadow-subtle p-5">
-                    <div className="text-sm text-text-secondary mb-1">Доход</div>
-                    <div className="text-2xl font-bold">
-                        {confirmedOwnerIncome.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ₽
-                    </div>
-                    <div className={`text-xs mt-1 ${weeklyGrowthColorClass}`}>За неделю: {formattedWeeklyIncomeGrowth}</div>
-                </div>
-                <div className="bg-white rounded-xl shadow-subtle p-5">
-                    <div className="text-sm text-text-secondary mb-1">Товары</div>
-                    <div className="text-2xl font-bold">{userProducts.length}</div>
-                    {lowStockProducts > 0 && (
-                        <div className="text-xs text-[#FF9500] mt-1">{lowStockProducts} мало на складе</div>
-                    )}
-                </div>
+                {showSellerStats && (
+                    <>
+                        <div className="bg-white rounded-xl shadow-subtle p-5">
+                            <div className="text-sm text-text-secondary mb-1">Активных магазинов</div>
+                            <div className="text-2xl font-bold">{activeStoresCount}</div>
+                        </div>
+                        <div className="bg-white rounded-xl shadow-subtle p-5">
+                            <div className="text-sm text-text-secondary mb-1">Доход</div>
+                            <div className="text-2xl font-bold">
+                                {confirmedOwnerIncome.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ₽
+                            </div>
+                            <div className={`text-xs mt-1 ${weeklyGrowthColorClass}`}>За неделю: {formattedWeeklyIncomeGrowth}</div>
+                        </div>
+                        <div className="bg-white rounded-xl shadow-subtle p-5">
+                            <div className="text-sm text-text-secondary mb-1">Товары</div>
+                            <div className="text-2xl font-bold">{userProducts.length}</div>
+                            {lowStockProducts > 0 && (
+                                <div className="text-xs text-[#FF9500] mt-1">{lowStockProducts} мало на складе</div>
+                            )}
+                        </div>
+                    </>
+                )}
             </div>
 
             <div className="bg-white rounded-2xl shadow-subtle p-6">
@@ -619,6 +631,9 @@ function StoresContent({ navigate }) {
         <div className="animate-fade">
             <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-bold">Мои магазины</h2>
+                <Button variant="secondary" size="sm" onClick={() => navigate('/seller')}>
+                    Кабинет продавца
+                </Button>
             </div>
 
             {isLoading ? (
@@ -883,6 +898,16 @@ function SettingsContent() {
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         className="w-full px-4 py-2.5 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm focus:bg-white focus:border-[#007AFF] outline-none transition"
                         placeholder="email@example.com"
+                    />
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-1.5">Роль</label>
+                    <input
+                        type="text"
+                        value={getRoleLabel(user?.role)}
+                        readOnly
+                        className="w-full px-4 py-2.5 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm text-text-secondary cursor-not-allowed"
                     />
                 </div>
 

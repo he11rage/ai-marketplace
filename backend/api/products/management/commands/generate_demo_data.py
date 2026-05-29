@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from api.categories.models import Category
 from api.stores.models import Store
 from api.products.models import Product
+from api.users.roles import UserRole
 
 User = get_user_model()
 
@@ -22,11 +23,11 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.WARNING('Creating users...'))
         users_data = [
-            {'username': 'tech_owner', 'email': 'tech@shop.com', 'first_name': 'Иван', 'last_name': 'Техников', 'phone': '+79991111111'},
-            {'username': 'fashion_queen', 'email': 'fashion@shop.com', 'first_name': 'Анна', 'last_name': 'Модная', 'phone': '+79992222222'},
-            {'username': 'book_worm', 'email': 'books@shop.com', 'first_name': 'Петр', 'last_name': 'Книжкин', 'phone': '+79993333333'},
-            {'username': 'sport_guy', 'email': 'sport@shop.com', 'first_name': 'Алекс', 'last_name': 'Спортивный', 'phone': '+79994444444'},
-            {'username': 'buyer_max', 'email': 'max@buyer.com', 'first_name': 'Макс', 'last_name': 'Покупатель', 'phone': '+79995555555'},
+            {'username': 'tech_owner', 'email': 'tech@shop.com', 'first_name': 'Иван', 'last_name': 'Техников', 'phone': '+79991111111', 'role': UserRole.SELLER},
+            {'username': 'fashion_queen', 'email': 'fashion@shop.com', 'first_name': 'Анна', 'last_name': 'Модная', 'phone': '+79992222222', 'role': UserRole.SELLER},
+            {'username': 'book_worm', 'email': 'books@shop.com', 'first_name': 'Петр', 'last_name': 'Книжкин', 'phone': '+79993333333', 'role': UserRole.SELLER},
+            {'username': 'sport_guy', 'email': 'sport@shop.com', 'first_name': 'Алекс', 'last_name': 'Спортивный', 'phone': '+79994444444', 'role': UserRole.SELLER},
+            {'username': 'buyer_max', 'email': 'max@buyer.com', 'first_name': 'Макс', 'last_name': 'Покупатель', 'phone': '+79995555555', 'role': UserRole.BUYER},
         ]
         
         created_users = []
@@ -37,7 +38,8 @@ class Command(BaseCommand):
                 password='123',
                 first_name=u_data['first_name'],
                 last_name=u_data['last_name'],
-                phone=u_data['phone']
+                phone=u_data['phone'],
+                role=u_data['role'],
             )
             created_users.append(user)
         self.stdout.write(self.style.SUCCESS(f'Created {len(created_users)} users.'))
@@ -70,7 +72,8 @@ class Command(BaseCommand):
                 owner=s_data['owner'],
                 slug=s_data['slug'],
                 description=s_data['desc'],
-                rating=round(random.uniform(3.5, 5.0), 1)
+                rating=round(random.uniform(3.5, 5.0), 1),
+                status=Store.STATUS_ACTIVE,
             )
             created_stores.append(store)
         self.stdout.write(self.style.SUCCESS(f'Created {len(created_stores)} stores.'))
@@ -110,7 +113,8 @@ class Command(BaseCommand):
                 stock_quantity=random.randint(0, 100),
                 rating=round(random.uniform(3.0, 5.0), 1),
                 review_count=random.randint(0, 200),
-                embedding=None
+                status=Product.STATUS_ACTIVE,
+                embedding=None,
             )
             
         self.stdout.write(self.style.SUCCESS('25 Products generated successfully!'))

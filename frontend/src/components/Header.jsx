@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useCart } from '../hooks/useCart';
 import { apiEndpoints } from '../api/axios';
+import { isAdmin, isSeller } from '../utils/roles';
 
 const SEARCH_DEBOUNCE_MS = 1000;
 
@@ -87,7 +88,20 @@ export default function Header() {
 
         {/* Right-side actions */}
         <div className="flex items-center gap-3">
-          {user?.is_admin && (
+          {isSeller(user) && (
+            <button
+              onClick={() => navigate('/seller')}
+              title="Кабинет продавца"
+              aria-label="Кабинет продавца"
+              className="w-10 h-10 rounded-full bg-[#34C759]/10 flex items-center justify-center hover:bg-[#34C759]/20 transition text-[#34C759]"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72L4.5 3.345M16.5 6.75h.008v.008H16.5V6.75Z" />
+              </svg>
+            </button>
+          )}
+
+          {isAdmin(user) && (
             <button
               onClick={() => navigate('/admin-panel')}
               title="Админ-панель"

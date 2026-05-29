@@ -3,6 +3,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from api.users.roles import UserRole
 from .models import Store
 
 
@@ -11,12 +12,14 @@ User = get_user_model()
 
 class StorePermissionTests(APITestCase):
     def setUp(self):
-        self.owner = User.objects.create_user(username="owner", password="pass12345")
+        self.owner = User.objects.create_user(
+            username="owner", password="pass12345", role=UserRole.SELLER
+        )
         self.other_user = User.objects.create_user(username="other", password="pass12345")
         self.admin = User.objects.create_user(
             username="admin",
             password="pass12345",
-            is_admin=True,
+            role=UserRole.ADMIN,
         )
         self.store = Store.objects.create(owner=self.owner, name="Owner Store")
         self.detail_url = reverse("store-detail", args=[self.store.id])
@@ -51,7 +54,9 @@ class StorePermissionTests(APITestCase):
 
 class StoreStatusTests(APITestCase):
     def setUp(self):
-        self.owner = User.objects.create_user(username="owner-status", password="pass12345")
+        self.owner = User.objects.create_user(
+            username="owner-status", password="pass12345", role=UserRole.SELLER
+        )
         self.list_url = reverse("store-list")
 
     def test_store_defaults_to_pending_moderation(self):

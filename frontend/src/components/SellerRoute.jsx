@@ -1,15 +1,15 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiEndpoints } from '../api/axios';
-import { isAdmin } from '../utils/roles';
+import { isSeller } from '../utils/roles';
 
-export default function AdminRoute({ children }) {
+export default function SellerRoute({ children }) {
   const location = useLocation();
   const token = localStorage.getItem('access_token');
 
   const { data: user, isLoading, isFetching, isError } = useQuery({
     queryKey: ['user'],
-    queryFn: () => apiEndpoints.me().then(res => res.data),
+    queryFn: () => apiEndpoints.me().then((res) => res.data),
     enabled: !!token,
     refetchOnMount: 'always',
   });
@@ -30,8 +30,8 @@ export default function AdminRoute({ children }) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  if (!isAdmin(user)) {
-    return <Navigate to="/" replace />;
+  if (!isSeller(user)) {
+    return <Navigate to="/account" replace state={{ sellerOnly: true }} />;
   }
 
   return children;

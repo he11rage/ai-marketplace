@@ -3,6 +3,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from api.users.roles import UserRole
 from .models import Category
 
 
@@ -15,7 +16,7 @@ class CategoryPermissionTests(APITestCase):
         self.admin = User.objects.create_user(
             username="admin",
             password="pass12345",
-            is_admin=True,
+            role=UserRole.ADMIN,
         )
         self.category = Category.objects.create(name="Electronics")
         self.list_url = reverse("category-list")

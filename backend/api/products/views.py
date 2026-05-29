@@ -2,11 +2,14 @@ from decimal import Decimal, InvalidOperation
 
 from rest_framework import serializers, viewsets
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import NotFound, PermissionDenied
+from api.stores.models import Store
+from api.users.roles import is_platform_admin, is_seller
 from rest_framework.decorators import action
 from django.db.models import Q, Sum, OuterRef, Subquery, IntegerField, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
+from .moderation import seller_update_moderation_fields
 from .models import Product, WishlistItem, ProductQuestion, ProductChangeLog
 from .pagination import OptionalPageNumberPagination
 from .serializers import (
@@ -180,13 +183,42 @@ class ProductViewSet(viewsets.ModelViewSet):
         elif ordering in allowed_ordering:
             queryset = queryset.order_by(ordering)
 
+        if self.action in ("list", "brands"):
+            queryset = queryset.filter(
+                status=Product.STATUS_ACTIVE,
+                store__status=Store.STATUS_ACTIVE,
+            )
+
         return queryset
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        is_publicly_visible = (
+            instance.status == Product.STATUS_ACTIVE
+            and instance.store.status == Store.STATUS_ACTIVE
+        )
+        if not is_publicly_visible:
+            user = request.user
+            can_view = (
+                user.is_authenticated
+                and (
+                    is_platform_admin(user)
+                    or (is_seller(user) and instance.store.owner_id == user.id)
+                )
+            )
+            if not can_view:
+                raise NotFound()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
     @extend_schema(tags=["products"], responses={200: {"type": "array", "items": {"type": "string"}}})
     @action(detail=False, methods=['get'], url_path='brands')
     def brands(self, request):
         brand_names = (
-            Product.objects
+            Product.objects.filter(
+                status=Product.STATUS_ACTIVE,
+                store__status=Store.STATUS_ACTIVE,
+            )
             .exclude(brand__isnull=True)
             .exclude(brand='')
             .values_list('brand', flat=True)
@@ -196,15 +228,20 @@ class ProductViewSet(viewsets.ModelViewSet):
         return Response(list(brand_names))
 
     def perform_create(self, serializer):
+        if not is_seller(self.request.user):
+            raise PermissionDenied("Добавлять товары могут только продавцы.")
         # Enforce owner-only product creation per store.
         store = serializer.validated_data.get('store')
-        if store and store.owner != self.request.user:
+        if store and store.owner != self.request.user and not is_platform_admin(self.request.user):
             raise PermissionDenied("Вы не можете добавлять товары в чужой магазин.")
-        # New products start with zero rating and reviews.
+        save_as_draft = _is_truthy(self.request.data.get("save_as_draft"))
+        initial_status = (
+            Product.STATUS_DRAFT if save_as_draft else Product.STATUS_PENDING_MODERATION
+        )
         product = serializer.save(
             rating=0,
             review_count=0,
-            status=Product.STATUS_PENDING_MODERATION,
+            status=initial_status,
         )
         ProductChangeLog.objects.create(
             product=product,
@@ -214,12 +251,18 @@ class ProductViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
+        if not is_seller(self.request.user):
+            raise PermissionDenied("Редактировать товары могут только продавцы.")
         # Only store owners can update products.
         product = self.get_object()
-        if product.store.owner != self.request.user:
+        if product.store.owner != self.request.user and not is_platform_admin(self.request.user):
             raise PermissionDenied("Вы не можете редактировать чужие товары.")
         original = getattr(product, "_original_for_audit", None)
-        updated = serializer.save()
+        moderation_fields = seller_update_moderation_fields(
+            product,
+            by_admin=is_platform_admin(self.request.user),
+        )
+        updated = serializer.save(**moderation_fields)
 
         tracked_fields = [
             "name",
@@ -251,9 +294,11 @@ class ProductViewSet(viewsets.ModelViewSet):
             )
 
     def perform_destroy(self, serializer):
+        if not is_seller(self.request.user):
+            raise PermissionDenied("Удалять товары могут только продавцы.")
         # Only store owners can delete products.
         product = self.get_object()
-        if product.store.owner != self.request.user:
+        if product.store.owner != self.request.user and not is_platform_admin(self.request.user):
             raise PermissionDenied("Вы не можете удалять чужие товары.")
         ProductChangeLog.objects.create(
             product=product,

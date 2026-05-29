@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Button from '../components/ui/Button';
 import { apiEndpoints } from '../api/axios';
+import { ROLE_LABELS, USER_ROLES } from '../utils/roles';
 
 export default function AdminModerationUsers() {
   const qc = useQueryClient();
@@ -25,7 +26,7 @@ export default function AdminModerationUsers() {
     <div className="bg-white rounded-2xl shadow-subtle border border-[#E5E5EA] overflow-hidden">
       <div className="p-5 border-b border-[#F2F2F7] flex flex-wrap items-center justify-between gap-3">
         <div className="font-bold text-lg">Пользователи</div>
-        <div className="text-sm text-text-secondary">Управление `is_active`, `is_admin`, `is_staff`.</div>
+        <div className="text-sm text-text-secondary">Роли: покупатель, продавец, админ. Также `is_active` и `is_staff`.</div>
       </div>
 
       {isLoading ? (
@@ -45,9 +46,9 @@ export default function AdminModerationUsers() {
                   <span className="text-[#E5E5EA]">•</span>
                   <span>email: <span className="font-medium text-text-primary">{u.email || '—'}</span></span>
                   <span className="text-[#E5E5EA]">•</span>
-                  <span>active: <span className="font-medium text-text-primary">{String(Boolean(u.is_active))}</span></span>
+                  <span>роль: <span className="font-medium text-text-primary">{ROLE_LABELS[u.role] || u.role || '—'}</span></span>
                   <span className="text-[#E5E5EA]">•</span>
-                  <span>admin: <span className="font-medium text-text-primary">{String(Boolean(u.is_admin))}</span></span>
+                  <span>active: <span className="font-medium text-text-primary">{String(Boolean(u.is_active))}</span></span>
                   <span className="text-[#E5E5EA]">•</span>
                   <span>staff: <span className="font-medium text-text-primary">{String(Boolean(u.is_staff))}</span></span>
                 </div>
@@ -56,8 +57,26 @@ export default function AdminModerationUsers() {
                 <Button variant="secondary" onClick={() => patchUser(u.id, { is_active: !u.is_active })}>
                   {u.is_active ? 'Деактивировать' : 'Активировать'}
                 </Button>
-                <Button variant="secondary" onClick={() => patchUser(u.id, { is_admin: !u.is_admin })}>
-                  {u.is_admin ? 'Снять admin' : 'Сделать admin'}
+                <Button
+                  variant="secondary"
+                  onClick={() => patchUser(u.id, { role: USER_ROLES.BUYER })}
+                  disabled={u.role === USER_ROLES.BUYER}
+                >
+                  Покупатель
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => patchUser(u.id, { role: USER_ROLES.SELLER })}
+                  disabled={u.role === USER_ROLES.SELLER}
+                >
+                  Продавец
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => patchUser(u.id, { role: USER_ROLES.ADMIN })}
+                  disabled={u.role === USER_ROLES.ADMIN}
+                >
+                  Админ
                 </Button>
                 <Button variant="secondary" onClick={() => patchUser(u.id, { is_staff: !u.is_staff })}>
                   {u.is_staff ? 'Снять staff' : 'Сделать staff'}

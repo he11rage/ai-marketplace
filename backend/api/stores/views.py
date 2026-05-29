@@ -1,7 +1,9 @@
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view
+from api.users.roles import is_seller
 from .models import Store
 from .permissions import IsStoreOwnerOrAdminOrReadOnly
 from .serializers import StoreSerializer
@@ -25,6 +27,8 @@ class StoreViewSet(viewsets.ModelViewSet):
     permission_classes = [IsStoreOwnerOrAdminOrReadOnly]
 
     def perform_create(self, serializer):
+        if not is_seller(self.request.user):
+            raise PermissionDenied("Создавать магазины могут только продавцы.")
         serializer.save(owner=self.request.user)
     
     def get_queryset(self):

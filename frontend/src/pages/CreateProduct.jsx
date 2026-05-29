@@ -145,8 +145,7 @@ export default function CreateProduct() {
         }
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const saveProduct = async (saveAsDraft = false) => {
         setIsSaving(true);
         try {
             const submitData = new FormData();
@@ -161,6 +160,7 @@ export default function CreateProduct() {
             if (formData.category) submitData.append('category', formData.category);
             submitData.append('store', formData.store);
             if (formData.image) submitData.append('image', formData.image);
+            if (saveAsDraft) submitData.append('save_as_draft', 'true');
 
             if (isEditMode) {
                 await apiEndpoints.updateProduct(id, submitData);
@@ -168,9 +168,10 @@ export default function CreateProduct() {
             } else {
                 await apiEndpoints.createProduct(submitData);
                 await queryClient.invalidateQueries(['products']);
+                await queryClient.invalidateQueries(['seller', 'products']);
             }
             await queryClient.invalidateQueries(['my-stores']);
-            navigate('/account');
+            navigate(saveAsDraft ? '/seller' : '/account');
         } catch (error) {
             console.error('Save error:', error);
             console.error('Response:', error.response?.data);
@@ -178,6 +179,16 @@ export default function CreateProduct() {
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        await saveProduct(false);
+    };
+
+    const handleSaveDraft = async (e) => {
+        e.preventDefault();
+        await saveProduct(true);
     };
 
     if (isEditMode && loadingProduct) {
@@ -202,7 +213,12 @@ export default function CreateProduct() {
                 </div>
                 <div className="flex gap-3">
                     <Button type="button" variant="secondary" onClick={() => navigate('/account')} disabled={isSaving}>Отмена</Button>
-                    <Button type="submit" disabled={isSaving}>{isSaving ? 'Сохранение...' : (isEditMode ? 'Сохранить изменения' : 'Опубликовать')}</Button>
+                    {!isEditMode && (
+                        <Button type="button" variant="outline" onClick={handleSaveDraft} disabled={isSaving}>
+                            {isSaving ? 'Сохранение...' : 'Сохранить черновик'}
+                        </Button>
+                    )}
+                    <Button type="submit" disabled={isSaving}>{isSaving ? 'Сохранение...' : (isEditMode ? 'Сохранить изменения' : 'На модерацию')}</Button>
                 </div>
             </div>
 

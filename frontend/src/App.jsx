@@ -23,6 +23,8 @@ import AdminModerationAudit from './pages/AdminModerationAudit';
 import AdminModerationAIHistory from './pages/AdminModerationAIHistory';
 import AdminRoute from './components/AdminRoute';
 import AuthRoute from './components/AuthRoute';
+import SellerRoute from './components/SellerRoute';
+import SellerCabinet from './pages/SellerCabinet';
 import NotFound from './pages/NotFound';
 
 function App() {
@@ -38,8 +40,8 @@ function App() {
           <Route path="/cart" element={<Cart />} />
           <Route path="/account" element={<Account />} />
           <Route path="/catalog" element={<Catalog />} />
-          <Route path="/create-product" element={<AuthRoute><CreateProduct /></AuthRoute>} />
-          <Route path="/create-product/:id" element={<AuthRoute><CreateProduct /></AuthRoute>} />
+          <Route path="/create-product" element={<SellerRoute><CreateProduct /></SellerRoute>} />
+          <Route path="/create-product/:id" element={<SellerRoute><CreateProduct /></SellerRoute>} />
           <Route path="/wishlist" element={<Wishlist />} />
           <Route path="/chat" element={<AIChat />} />
           <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
@@ -53,8 +55,9 @@ function App() {
             <Route path="audit" element={<AdminModerationAudit />} />
             <Route path="ai-history" element={<AdminModerationAIHistory />} />
           </Route>
-          <Route path="/create-store" element={<AuthRoute><CreateStore /></AuthRoute>} />
-          <Route path="/create-store/:id" element={<AuthRoute><CreateStore /></AuthRoute>} />
+          <Route path="/create-store" element={<SellerRoute><CreateStore /></SellerRoute>} />
+          <Route path="/create-store/:id" element={<SellerRoute><CreateStore /></SellerRoute>} />
+          <Route path="/seller" element={<SellerRoute><SellerCabinet /></SellerRoute>} />
           <Route path="/store/:id" element={<StoreDetail />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

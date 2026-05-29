@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     'api.reports',
     'api.ai_chat',
     'api.moderation',
+    'api.seller',
     'djoser',
 ]
 

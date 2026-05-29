@@ -7,30 +7,48 @@ from datetime import timedelta
 from api.orders.models import OrderItem
 from decimal import Decimal
 
+from .roles import UserRole
+
 
 User = get_user_model()
 
+REGISTRATION_ROLES = {UserRole.BUYER, UserRole.SELLER}
+
+
 class CustomUserCreateSerializer(UserCreateSerializer):
     """Extended user serializer"""
-    
+
+    role = serializers.ChoiceField(
+        choices=[(UserRole.BUYER, UserRole.BUYER.label), (UserRole.SELLER, UserRole.SELLER.label)],
+        default=UserRole.BUYER,
+        required=False,
+    )
+
     class Meta(UserCreateSerializer.Meta):
         model = User
-        
+
         fields = (
-            'id',
-            'username',
-            'email',
-            'password',
-            'first_name',
-            'last_name',
-            'phone',
-            'is_admin',
+            "id",
+            "username",
+            "email",
+            "password",
+            "first_name",
+            "last_name",
+            "phone",
+            "role",
+            "is_admin",
         )
 
-        read_only_fields = ('id', 'is_admin')
-        
+        read_only_fields = ("id", "is_admin")
+
+    def validate_role(self, value):
+        if value not in REGISTRATION_ROLES:
+            raise serializers.ValidationError("При регистрации можно выбрать только роль покупателя или продавца.")
+        return value
+
     def create(self, validated_data):
-        user = User.objects.create_user(**validated_data)
+        role = validated_data.pop("role", UserRole.BUYER)
+        user = User.objects.create_user(**validated_data, role=role)
         return user
     
 class CustomUserUpdateSerializer(UserSerializer):
@@ -42,18 +60,19 @@ class CustomUserUpdateSerializer(UserSerializer):
     class Meta:
         model = User
         fields = (
-            'id',
-            'username',
-            'email',
-            'first_name',
-            'last_name',
-            'phone',
-            'is_admin',
-            'confirmed_owner_items_count',
-            'confirmed_owner_items_week_count',
-            'confirmed_owner_items_previous_week_count',
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "phone",
+            "role",
+            "is_admin",
+            "confirmed_owner_items_count",
+            "confirmed_owner_items_week_count",
+            "confirmed_owner_items_previous_week_count",
         )
-        read_only_fields = ('id', 'username', 'is_admin')
+        read_only_fields = ("id", "username", "is_admin", "role")
 
     def get_confirmed_owner_items_count(self, obj):
         return self._get_confirmed_owner_income(obj)

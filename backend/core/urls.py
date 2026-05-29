@@ -71,6 +71,7 @@ urlpatterns = [
     path("api/reports/", include("api.reports.urls")),
     path('api/ai/', include('api.ai_chat.urls')),
     path("api/moderation/", include("api.moderation.urls")),
+    path("api/seller/", include("api.seller.urls")),
     path("auth/", include("djoser.urls")),
     path("auth/", include("djoser.urls.jwt")),
 ]

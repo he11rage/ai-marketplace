@@ -8,6 +8,7 @@ from rest_framework.test import APITestCase
 from api.categories.models import Category
 from api.products.models import Product
 from api.stores.models import Store
+from api.users.roles import UserRole
 
 
 User = get_user_model()
@@ -15,8 +16,12 @@ User = get_user_model()
 
 class ProductStatusTests(APITestCase):
     def setUp(self):
-        self.owner = User.objects.create_user(username="owner", password="pass12345")
-        self.store = Store.objects.create(owner=self.owner, name="Owner Store")
+        self.owner = User.objects.create_user(
+            username="owner", password="pass12345", role=UserRole.SELLER
+        )
+        self.store = Store.objects.create(
+            owner=self.owner, name="Owner Store", status=Store.STATUS_ACTIVE
+        )
         self.category = Category.objects.create(name="Electronics")
         self.list_url = reverse("product-list")
 
@@ -56,49 +61,74 @@ class ProductStatusTests(APITestCase):
         self.assertEqual(response.data["status"], Product.STATUS_PENDING_MODERATION)
         get_embedding_mock.assert_called_once()
 
+    def test_seller_edit_active_product_via_products_api_goes_to_pending_moderation(self):
+        active = Product.objects.create(
+            store=self.store,
+            category=self.category,
+            name="Live Gadget",
+            description="On sale",
+            price="150.00",
+            stock_quantity=2,
+            status=Product.STATUS_ACTIVE,
+            embedding=[0.0] * 1024,
+        )
+        self.client.force_authenticate(self.owner)
+        url = reverse("product-detail", kwargs={"pk": active.id})
+        response = self.client.patch(url, {"name": "Live Gadget v2"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], Product.STATUS_PENDING_MODERATION)
+        active.refresh_from_db()
+        self.assertEqual(active.status, Product.STATUS_PENDING_MODERATION)
+
 
 class ProductCatalogFilterTests(APITestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="owner", password="pass12345")
-        self.store = Store.objects.create(owner=self.owner, name="Owner Store")
+        self.store = Store.objects.create(
+            owner=self.owner, name="Owner Store", status=Store.STATUS_ACTIVE
+        )
         self.phones = Category.objects.create(name="Phones")
         self.laptops = Category.objects.create(name="Laptops")
         self.list_url = reverse("product-list")
         self.brands_url = reverse("product-brands")
 
-        Product.objects.create(
-            store=self.store,
-            category=self.phones,
-            name="Budget Phone",
-            description="Cheap phone",
-            price="100.00",
-            brand="Acme",
-            stock_quantity=0,
-            rating="3.0",
-            embedding=[0.0] * 1024,
-        )
-        Product.objects.create(
-            store=self.store,
-            category=self.laptops,
-            name="Pro Laptop",
-            description="Powerful laptop",
-            price="500.00",
-            brand="Globex",
-            stock_quantity=10,
-            rating="4.8",
-            embedding=[0.0] * 1024,
-        )
-        Product.objects.create(
-            store=self.store,
-            category=self.phones,
-            name="Flagship Phone",
-            description="Premium phone",
-            price="300.00",
-            brand="Acme",
-            stock_quantity=3,
-            rating="4.6",
-            embedding=[0.0] * 1024,
-        )
+        for kwargs in (
+            dict(
+                store=self.store,
+                category=self.phones,
+                name="Budget Phone",
+                description="Cheap phone",
+                price="100.00",
+                brand="Acme",
+                stock_quantity=0,
+                rating="3.0",
+            ),
+            dict(
+                store=self.store,
+                category=self.laptops,
+                name="Pro Laptop",
+                description="Powerful laptop",
+                price="500.00",
+                brand="Globex",
+                stock_quantity=10,
+                rating="4.8",
+            ),
+            dict(
+                store=self.store,
+                category=self.phones,
+                name="Flagship Phone",
+                description="Premium phone",
+                price="300.00",
+                brand="Acme",
+                stock_quantity=3,
+                rating="4.6",
+            ),
+        ):
+            Product.objects.create(
+                status=Product.STATUS_ACTIVE,
+                embedding=[0.0] * 1024,
+                **kwargs,
+            )
 
     def test_filter_by_multiple_categories(self):
         response = self.client.get(
@@ -167,7 +197,9 @@ class ProductCatalogFilterTests(APITestCase):
 class ProductCatalogOrderingTests(APITestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="owner", password="pass12345")
-        self.store = Store.objects.create(owner=self.owner, name="Owner Store")
+        self.store = Store.objects.create(
+            owner=self.owner, name="Owner Store", status=Store.STATUS_ACTIVE
+        )
         self.category = Category.objects.create(name="Phones")
         self.list_url = reverse("product-list")
 
@@ -179,6 +211,7 @@ class ProductCatalogOrderingTests(APITestCase):
             description="Cheap phone",
             rating="3.0",
             review_count=5,
+            status=Product.STATUS_ACTIVE,
             embedding=[0.0] * 1024,
         )
         self.flagship_phone = Product.objects.create(
@@ -189,6 +222,7 @@ class ProductCatalogOrderingTests(APITestCase):
             description="Premium phone",
             rating="4.8",
             review_count=50,
+            status=Product.STATUS_ACTIVE,
             embedding=[0.0] * 1024,
         )
         self.mid_phone = Product.objects.create(
@@ -199,6 +233,7 @@ class ProductCatalogOrderingTests(APITestCase):
             description="Balanced phone",
             rating="4.0",
             review_count=20,
+            status=Product.STATUS_ACTIVE,
             embedding=[0.0] * 1024,
         )
 
@@ -242,7 +277,9 @@ class ProductCatalogOrderingTests(APITestCase):
 
 class ProductQuestionsAndHistoryTests(APITestCase):
     def setUp(self):
-        self.owner = User.objects.create_user(username="owner2", password="pass12345")
+        self.owner = User.objects.create_user(
+            username="owner2", password="pass12345", role=UserRole.SELLER
+        )
         self.other_user = User.objects.create_user(username="other", password="pass12345")
         self.store = Store.objects.create(owner=self.owner, name="Owner Store 2")
         self.category = Category.objects.create(name="Accessories")

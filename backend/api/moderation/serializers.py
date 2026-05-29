@@ -5,6 +5,7 @@ from api.orders.models import Order, OrderItem
 from api.products.models import Product
 from api.stores.models import Store
 from api.users.models import CustomUser
+from api.users.roles import UserRole
 from .models import AdminActionLog
 
 
@@ -90,6 +91,8 @@ class StoreModerationSerializer(serializers.ModelSerializer):
 
 
 class UserAdminSerializer(serializers.ModelSerializer):
+    role = serializers.ChoiceField(choices=UserRole.choices)
+
     class Meta:
         model = CustomUser
         fields = [
@@ -98,12 +101,22 @@ class UserAdminSerializer(serializers.ModelSerializer):
             "email",
             "first_name",
             "last_name",
+            "role",
             "is_active",
             "is_staff",
             "is_admin",
             "date_joined",
             "last_login",
         ]
+        read_only_fields = ["is_admin"]
+
+    def update(self, instance, validated_data):
+        role = validated_data.get("role")
+        if role == UserRole.ADMIN:
+            validated_data["is_admin"] = True
+        elif role is not None:
+            validated_data["is_admin"] = False
+        return super().update(instance, validated_data)
 
 
 class AIChatHistoryAdminSerializer(serializers.ModelSerializer):
