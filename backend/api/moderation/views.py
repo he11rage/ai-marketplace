@@ -1,3 +1,4 @@
+from django.db.models import Count
 from django.db.models import Prefetch
 from django.utils import timezone
 from rest_framework import viewsets, status
@@ -5,6 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from api.ai_chat.models import AIChatHistory
+from api.categories.models import Category
 from api.orders.models import Order, OrderItem
 from api.products.models import Product
 from api.reports.models import Report
@@ -18,6 +20,7 @@ from .serializers import (
     AdminActionLogSerializer,
     AIChatHistoryAdminSerializer,
     OrderAdminSerializer,
+    CategoryModerationSerializer,
     ProductModerationSerializer,
     StoreModerationSerializer,
     UserAdminSerializer,
@@ -55,7 +58,7 @@ class ProductModerationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = (
-            Product.objects.select_related("store", "store__owner")
+            Product.objects.select_related("store", "store__owner", "category")
             .all()
             .order_by("-created_at")
         )
@@ -94,6 +97,62 @@ class ProductModerationViewSet(viewsets.ModelViewSet):
             {"from": before, "to": new_status, "reason": reason},
         )
         return Response(self.get_serializer(product).data)
+
+
+class CategoryModerationViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = CategoryModerationSerializer
+    permission_classes = [IsModerator]
+    http_method_names = ["get", "head", "options", "post"]
+
+    def get_queryset(self):
+        qs = (
+            Category.objects.select_related("created_by")
+            .annotate(products_count=Count("products"))
+            .order_by("-id")
+        )
+        verified = (self.request.query_params.get("verified") or "false").strip().lower()
+        if verified in {"false", "0", "no"}:
+            qs = qs.filter(is_verified=False)
+        elif verified in {"true", "1", "yes"}:
+            qs = qs.filter(is_verified=True)
+        q = (self.request.query_params.get("q") or "").strip()
+        if q:
+            qs = qs.filter(name__icontains=q)
+        return qs
+
+    @action(detail=True, methods=["post"], url_path="verify")
+    def verify(self, request, pk=None):
+        category = self.get_object()
+        if category.is_verified:
+            return Response(
+                {"detail": "Категория уже проверена."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        category.is_verified = True
+        category.save(update_fields=["is_verified"])
+        _log(
+            request,
+            "category.verify",
+            "category",
+            category.id,
+            {"name": category.name},
+        )
+        return Response(self.get_serializer(category).data)
+
+    @action(detail=True, methods=["post"], url_path="reject")
+    def reject(self, request, pk=None):
+        category = self.get_object()
+        if category.is_verified:
+            return Response(
+                {"detail": "Нельзя отклонить проверенную категорию."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        reason = (request.data or {}).get("reason", "") or ""
+        payload = {"name": category.name, "reason": reason}
+        category_id = category.id
+        category.delete()
+        _log(request, "category.reject", "category", category_id, payload)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class StoreModerationViewSet(viewsets.ModelViewSet):

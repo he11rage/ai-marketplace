@@ -275,6 +275,53 @@ class ProductCatalogOrderingTests(APITestCase):
         self.assertEqual(self._product_names(response), ["Flagship Phone", "Mid Phone", "Budget Phone"])
 
 
+class ProductStoreModerationVisibilityTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="owner", password="pass12345")
+        self.active_store = Store.objects.create(
+            owner=self.owner, name="Active Store", status=Store.STATUS_ACTIVE
+        )
+        self.pending_store = Store.objects.create(
+            owner=self.owner, name="Pending Store", status=Store.STATUS_PENDING_MODERATION
+        )
+        self.category = Category.objects.create(name="Phones")
+        self.list_url = reverse("product-list")
+
+        Product.objects.create(
+            store=self.active_store,
+            category=self.category,
+            name="Visible Product",
+            description="From active store",
+            price="100.00",
+            stock_quantity=5,
+            status=Product.STATUS_ACTIVE,
+            embedding=[0.0] * 1024,
+        )
+        Product.objects.create(
+            store=self.pending_store,
+            category=self.category,
+            name="Hidden Product",
+            description="From pending store",
+            price="200.00",
+            stock_quantity=5,
+            status=Product.STATUS_ACTIVE,
+            embedding=[0.0] * 1024,
+        )
+
+    def test_catalog_excludes_products_from_pending_moderation_store(self):
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        names = {item["name"] for item in response.data}
+        self.assertEqual(names, {"Visible Product"})
+
+    def test_catalog_excludes_products_when_filtering_by_pending_store(self):
+        response = self.client.get(self.list_url, {"store": self.pending_store.id})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 0)
+
+
 class ProductQuestionsAndHistoryTests(APITestCase):
     def setUp(self):
         self.owner = User.objects.create_user(

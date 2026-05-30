@@ -25,6 +25,14 @@ class Order(models.Model):
         (STATUS_REFUNDED, 'Refunded'),
     ]
 
+    # Order statuses that count toward store/product sales metrics.
+    SALES_COUNT_STATUSES = (
+        STATUS_PAID,
+        STATUS_PROCESSING,
+        STATUS_SHIPPED,
+        STATUS_DELIVERED,
+    )
+
     ALLOWED_STATUS_TRANSITIONS = {
         STATUS_CREATED: {STATUS_AWAITING_PAYMENT, STATUS_PAID, STATUS_CANCELLED},
         STATUS_AWAITING_PAYMENT: {STATUS_PAID, STATUS_CANCELLED},

@@ -6,13 +6,12 @@ import { apiEndpoints } from '../api/axios';
 
 function normalizeCountResponse(data) {
   if (!data) return null;
-  if (Array.isArray(data)) return data.length;
   if (typeof data.count === 'number') return data.count;
-  if (Array.isArray(data.results)) return data.results.length;
+  if (Array.isArray(data)) return data.length;
   return null;
 }
 
-function StatCard({ title, value, hint, onClick, tone = 'default' }) {
+function StatCard({ title, value, onClick, tone = 'default' }) {
   const toneClasses = {
     default: 'bg-white border-[#E5E5EA]',
     info: 'bg-[#007AFF]/5 border-[#007AFF]/20',
@@ -38,7 +37,6 @@ function StatCard({ title, value, hint, onClick, tone = 'default' }) {
           </svg>
         </div>
       </div>
-      {hint ? <div className="mt-3 text-xs text-text-secondary">{hint}</div> : null}
     </button>
   );
 }
@@ -55,9 +53,9 @@ export default function AdminPanel() {
     isLoading: storesLoading,
     isError: storesError,
   } = useQuery({
-    queryKey: ['admin-panel', 'stores-count'],
+    queryKey: ['admin-panel', 'stores'],
     queryFn: async () => {
-      const res = await apiEndpoints.getStores();
+      const res = await apiEndpoints.moderationListStores();
       return res.data;
     },
   });
@@ -69,9 +67,9 @@ export default function AdminPanel() {
     isLoading: reportsLoading,
     isError: reportsError,
   } = useQuery({
-    queryKey: ['admin-panel', 'reports-count'],
+    queryKey: ['admin-panel', 'reports-open-count'],
     queryFn: async () => {
-      const res = await apiEndpoints.getMyReports();
+      const res = await apiEndpoints.moderationListReports({ status: 'open' });
       return res.data;
     },
   });
@@ -83,23 +81,9 @@ export default function AdminPanel() {
   } = useQuery({
     queryKey: ['admin-panel', 'products-pending-count'],
     queryFn: async () => {
-      const tryParams = [
-        { status: 'pending' },
-        { moderation_status: 'pending' },
-        { is_approved: false },
-        { pending: true },
-      ];
-
-      for (const params of tryParams) {
-        // eslint-disable-next-line no-await-in-loop
-        const res = await apiEndpoints.getProducts({ ...params, page: 1, page_size: 1 });
-        const count = normalizeCountResponse(res.data);
-        if (typeof count === 'number') return { count, params };
-      }
-
-      return { count: null, paramsTried: tryParams };
+      const res = await apiEndpoints.moderationListProducts({ status: 'pending_moderation' });
+      return res.data;
     },
-    retry: false,
   });
 
   const {
@@ -109,15 +93,27 @@ export default function AdminPanel() {
   } = useQuery({
     queryKey: ['admin-panel', 'users-count'],
     queryFn: async () => {
-      const res = await apiEndpoints.listUsers({ page: 1, page_size: 1 });
+      const res = await apiEndpoints.moderationListUsers();
       return res.data;
     },
-    retry: false,
+  });
+
+  const {
+    data: pendingCategoriesData,
+    isLoading: pendingCategoriesLoading,
+    isError: pendingCategoriesError,
+  } = useQuery({
+    queryKey: ['admin-panel', 'categories-pending-count'],
+    queryFn: async () => {
+      const res = await apiEndpoints.moderationListCategories({ verified: 'false' });
+      return res.data;
+    },
   });
 
   const storesCount = useMemo(() => normalizeCountResponse(storesData), [storesData]);
   const reportsCount = useMemo(() => normalizeCountResponse(reportsData), [reportsData]);
-  const pendingProductsCount = pendingProductsData?.count ?? null;
+  const pendingProductsCount = useMemo(() => normalizeCountResponse(pendingProductsData), [pendingProductsData]);
+  const pendingCategoriesCount = useMemo(() => normalizeCountResponse(pendingCategoriesData), [pendingCategoriesData]);
   const usersCount = useMemo(() => normalizeCountResponse(usersData), [usersData]);
 
   const unresolvedValue = '—';
@@ -174,7 +170,7 @@ export default function AdminPanel() {
           <div className="inline-flex items-center rounded-full bg-[#007AFF]/10 px-3 py-1 text-xs font-semibold text-[#007AFF] mb-4">
             Admin
           </div>
-          <h1 className="text-3xl font-bold mb-2">Админка</h1>
+          <h1 className="text-3xl font-bold mb-2">Админ-панель</h1>
           <p className="text-text-secondary max-w-2xl">
             Дашборд для быстрой проверки очередей и проблемных мест.
           </p>
@@ -195,13 +191,19 @@ export default function AdminPanel() {
               ? loadingValue
               : (pendingProductsError ? unresolvedValue : (pendingProductsCount ?? unresolvedValue))
           }
-          hint={
-            pendingProductsError
-              ? 'Нет подходящего API/фильтра для очереди модерации.'
-              : 'Счётчик строится из /api/products/ (если бэк поддерживает фильтр).'
-          }
           tone="warning"
           onClick={() => navigate('/admin/moderation/products')}
+        />
+
+        <StatCard
+          title="Категории на проверке"
+          value={
+            pendingCategoriesLoading
+              ? loadingValue
+              : (pendingCategoriesError ? unresolvedValue : (pendingCategoriesCount ?? unresolvedValue))
+          }
+          tone="warning"
+          onClick={() => navigate('/admin/moderation/categories')}
         />
 
         <StatCard
@@ -210,11 +212,6 @@ export default function AdminPanel() {
             reportsLoading
               ? loadingValue
               : (reportsError ? unresolvedValue : (reportsCount ?? unresolvedValue))
-          }
-          hint={
-            reportsError
-              ? 'Не удалось загрузить /api/reports/.'
-              : 'Сейчас используется /api/reports/ (как доступно в клиенте).'
           }
           tone="danger"
           onClick={() => navigate('/admin/moderation/reports')}
@@ -227,11 +224,6 @@ export default function AdminPanel() {
               ? loadingValue
               : (storesError ? unresolvedValue : (storesCount ?? unresolvedValue))
           }
-          hint={
-            storesError
-              ? 'Не удалось загрузить /api/stores/.'
-              : 'Общее количество магазинов. Ниже можно открыть магазин и задать "Проверенный" + ручной рейтинг.'
-          }
           tone="info"
           onClick={() => navigate('/admin/moderation/stores')}
         />
@@ -243,11 +235,6 @@ export default function AdminPanel() {
               ? loadingValue
               : (usersError ? unresolvedValue : (usersCount ?? unresolvedValue))
           }
-          hint={
-            usersError
-              ? 'Не удалось загрузить /auth/users/ (нужны права администратора).'
-              : 'Счётчик строится через Djoser: /auth/users/.'
-          }
           tone="default"
           onClick={() => navigate('/admin/moderation/users')}
         />
@@ -255,7 +242,6 @@ export default function AdminPanel() {
         <StatCard
           title="AI-ошибки"
           value={unresolvedValue}
-          hint="Откройте AI‑историю — там видны запросы/ответы и токены. Ошибки можно будет отдельным типом логировать позже."
           tone="default"
           onClick={() => navigate('/admin/moderation/ai-history')}
         />

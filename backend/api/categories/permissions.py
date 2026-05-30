@@ -1,9 +1,13 @@
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
+from api.users.roles import is_platform_admin, is_seller
 
-class IsAdminOrReadOnly(BasePermission):
+
+class CategoryPermissions(BasePermission):
     """
-    Allow public category reads, but only admin users can manage categories.
+    Public read access to verified categories.
+    Sellers can create categories (pending verification).
+    Only admins can update or delete categories.
     """
 
     def has_permission(self, request, view):
@@ -11,8 +15,10 @@ class IsAdminOrReadOnly(BasePermission):
             return True
 
         user = request.user
-        return bool(
-            user
-            and user.is_authenticated
-            and (getattr(user, "is_admin", False) or user.is_staff)
-        )
+        if not user or not user.is_authenticated:
+            return False
+
+        if request.method == "POST":
+            return is_seller(user) or is_platform_admin(user)
+
+        return is_platform_admin(user)

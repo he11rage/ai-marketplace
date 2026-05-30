@@ -11,12 +11,7 @@ from api.products.models import Product
 from api.reviews.models import Review
 from api.stores.models import Store
 
-CONFIRMED_ORDER_STATUSES = [
-    Order.STATUS_PAID,
-    Order.STATUS_PROCESSING,
-    Order.STATUS_SHIPPED,
-    Order.STATUS_DELIVERED,
-]
+CONFIRMED_ORDER_STATUSES = list(Order.SALES_COUNT_STATUSES)
 
 DEFAULT_LOW_STOCK_THRESHOLD = 5
 SALES_CHART_DAYS = 14

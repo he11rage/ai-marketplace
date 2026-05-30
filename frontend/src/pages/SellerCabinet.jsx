@@ -28,6 +28,37 @@ const PRODUCT_STATUS_MAP = {
   archived: { label: 'Скрыт / архив', variant: 'default' },
 };
 
+const MODERATION_NOTICE_MAP = {
+  draft: { tag: 'На доработку', variant: 'warning', tone: 'warning' },
+  rejected: { tag: 'Отклонён модератором', variant: 'error', tone: 'error' },
+  blocked: { tag: 'Заблокирован модератором', variant: 'error', tone: 'error' },
+};
+
+const MODERATION_TONE_STYLES = {
+  warning: 'bg-[#FF9500]/10 text-[#FF9500] border-[#FF9500]/20',
+  error: 'bg-[#FF3B30]/10 text-[#FF3B30] border-[#FF3B30]/20',
+};
+
+function ProductModerationNotice({ product }) {
+  const reason = (product.moderation_reason || '').trim();
+  if (!reason) return null;
+
+  const meta = MODERATION_NOTICE_MAP[product.status];
+  if (!meta) return null;
+
+  return (
+    <div
+      className={`mt-2 p-3 rounded-xl border text-sm ${MODERATION_TONE_STYLES[meta.tone]}`}
+    >
+      <div className="flex items-center gap-2 flex-wrap mb-1">
+        <Badge variant={meta.variant}>{meta.tag}</Badge>
+        <span className="text-xs opacity-80">Комментарий модератора</span>
+      </div>
+      <p className="leading-relaxed">{reason}</p>
+    </div>
+  );
+}
+
 const PRODUCT_TABS = [
   { id: '', label: 'Все' },
   { id: 'draft', label: 'Черновики' },
@@ -37,9 +68,7 @@ const PRODUCT_TABS = [
 ];
 
 const SELLER_ORDER_ACTIONS = {
-  paid: { next: 'processing', label: 'В обработку' },
-  processing: { next: 'shipped', label: 'Отправлен' },
-  shipped: { next: 'delivered', label: 'Доставлен' },
+  paid: { next: 'processing', label: 'На склад' },
 };
 
 function OrdersTab({ storeFilter }) {
@@ -277,6 +306,7 @@ function ProductsTab({ storeFilter, navigate }) {
                   <div className="text-sm text-text-secondary mt-1">
                     {product.store_name} • {product.price}₽ • остаток: {product.stock_quantity}
                   </div>
+                  <ProductModerationNotice product={product} />
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 justify-end">
@@ -319,6 +349,14 @@ function ProductsTab({ storeFilter, navigate }) {
                     disabled={actionMutation.isPending}
                   >
                     Вернуть
+                  </Button>
+                )}
+                {(product.status === 'rejected' || product.status === 'blocked') && (
+                  <Button
+                    size="sm"
+                    onClick={() => navigate(`/create-product/${product.id}`)}
+                  >
+                    Исправить
                   </Button>
                 )}
               </div>

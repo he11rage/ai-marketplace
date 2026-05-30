@@ -39,7 +39,10 @@ export default function AdminModerationStores() {
   };
 
   const setStoreStatus = async (id, next) => {
-    const reason = window.prompt('Причина модерации (необязательно):', '') ?? '';
+    const needsReason = ['limited', 'rejected', 'blocked'].includes(next);
+    const reason = needsReason
+      ? (window.prompt('Причина модерации (необязательно):', '') ?? '')
+      : '';
     await apiEndpoints.moderationSetStoreStatus(id, { status: next, reason });
     await qc.invalidateQueries({ queryKey: ['moderation', 'stores'] });
   };

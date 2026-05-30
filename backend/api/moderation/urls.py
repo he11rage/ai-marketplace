@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     AdminActionLogViewSet,
     AIChatHistoryAdminViewSet,
+    CategoryModerationViewSet,
     OrdersModerationViewSet,
     ProductModerationViewSet,
     ReportModerationViewSet,
@@ -14,6 +15,7 @@ from .views import (
 
 router = DefaultRouter()
 router.register(r"products", ProductModerationViewSet, basename="moderation-products")
+router.register(r"categories", CategoryModerationViewSet, basename="moderation-categories")
 router.register(r"stores", StoreModerationViewSet, basename="moderation-stores")
 router.register(r"reports", ReportModerationViewSet, basename="moderation-reports")
 router.register(r"users", UsersAdminViewSet, basename="moderation-users")

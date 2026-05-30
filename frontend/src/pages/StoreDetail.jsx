@@ -14,11 +14,6 @@ export default function StoreDetail() {
 
     const [showToast, setShowToast] = useState(false);
     const [isReviewsOpen, setIsReviewsOpen] = useState(false);
-    const [isReportOpen, setIsReportOpen] = useState(false);
-    const [reportReason, setReportReason] = useState('Спам/мошенничество');
-    const [reportDescription, setReportDescription] = useState('');
-    const [reportError, setReportError] = useState('');
-    const [reportSuccess, setReportSuccess] = useState('');
 
     // Request store details.
     const { data: store, isLoading: storeLoading, error: storeError } = useQuery({
@@ -77,24 +72,6 @@ export default function StoreDetail() {
         navigator.clipboard.writeText(window.location.href);
         setShowToast(true);
         setTimeout(() => setShowToast(false), 2500);
-    };
-
-    const handleSubmitReport = async () => {
-        setReportError('');
-        setReportSuccess('');
-        try {
-            await apiEndpoints.createReport({
-                target_type: 'store',
-                store: Number(id),
-                reason: reportReason,
-                description: reportDescription,
-            });
-            setReportSuccess('Жалоба отправлена.');
-            setReportDescription('');
-        } catch (e) {
-            const msg = e?.response?.data?.detail || 'Не удалось отправить жалобу.';
-            setReportError(msg);
-        }
     };
 
     // Loading state.
@@ -232,92 +209,12 @@ export default function StoreDetail() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                             </svg>
                         </Button>
-                        <button
-                            type="button"
-                            onClick={() => setIsReportOpen(true)}
-                            className="text-sm text-[#FF3B30] hover:underline"
-                            title="Пожаловаться на магазин"
-                        >
-                            Пожаловаться
-                        </button>
                     </div>
                 </div>
 
-                {/* Report modal */}
-                {isReportOpen && (
-                    <div className="fixed inset-0 z-50 flex items-start justify-center p-6">
-                        <button
-                            type="button"
-                            className="absolute inset-0 bg-black/30"
-                            onClick={() => {
-                                setIsReportOpen(false);
-                                setReportError('');
-                                setReportSuccess('');
-                            }}
-                            aria-label="Закрыть"
-                        />
-                        <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden">
-                            <div className="flex items-center justify-between px-6 py-4 border-b border-[#F2F2F7]">
-                                <div className="text-lg font-bold">Жалоба на магазин</div>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsReportOpen(false)}
-                                    className="w-10 h-10 rounded-full bg-[#F2F2F7] hover:bg-[#E5E5EA] transition flex items-center justify-center text-text-secondary"
-                                    aria-label="Закрыть"
-                                >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                            </div>
-                            <div className="p-6 space-y-4">
-                                {reportError && <div className="text-sm text-[#FF3B30]">{reportError}</div>}
-                                {reportSuccess && <div className="text-sm text-[#34C759]">{reportSuccess}</div>}
-
-                                <label className="block">
-                                    <div className="text-sm font-medium text-text-secondary mb-2">Причина</div>
-                                    <select
-                                        value={reportReason}
-                                        onChange={(e) => setReportReason(e.target.value)}
-                                        className="w-full bg-[#F2F2F7] rounded-xl px-4 py-3 outline-none"
-                                    >
-                                        {[
-                                            'Спам/мошенничество',
-                                            'Оскорбления/ненависть',
-                                            'Нецензурная лексика',
-                                            'Ложная информация',
-                                            'Другое',
-                                        ].map((opt) => (
-                                            <option key={opt} value={opt}>{opt}</option>
-                                        ))}
-                                    </select>
-                                </label>
-
-                                <label className="block">
-                                    <div className="text-sm font-medium text-text-secondary mb-2">Комментарий</div>
-                                    <textarea
-                                        value={reportDescription}
-                                        onChange={(e) => setReportDescription(e.target.value)}
-                                        rows={4}
-                                        className="w-full bg-[#F2F2F7] rounded-xl px-4 py-3 outline-none resize-none"
-                                        placeholder="Опишите, что именно не так"
-                                    />
-                                </label>
-
-                                <div className="flex justify-end gap-3">
-                                    <Button variant="secondary" onClick={() => setIsReportOpen(false)}>
-                                        Отмена
-                                    </Button>
-                                    <Button onClick={handleSubmitReport}>Отправить</Button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
                 {/* Store reviews modal */}
                 {isReviewsOpen && (
-                    <div className="fixed inset-0 z-50 flex items-start justify-center p-6">
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
                         <button
                             type="button"
                             className="absolute inset-0 bg-black/30"

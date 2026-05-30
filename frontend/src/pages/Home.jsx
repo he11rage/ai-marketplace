@@ -107,9 +107,9 @@ export default function Home() {
 			<div className="max-w-[1440px] mx-auto px-6 py-8">
 				<div className="rounded-2xl p-12 mb-10 text-white relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)' }}>
 					<div className="relative z-10 max-w-xl">
-						<h1 className="text-3xl font-bold mb-3">AI-маркетплейс с конструктором магазинов</h1>
+						<h1 className="text-3xl font-bold mb-3">AI-маркетплейс с умными рекомендациями</h1>
 						<p className="text-white/80 text-base mb-5">
-							Персонализированные рекомендации и инструменты для запуска бизнеса за минуты.
+							Находите нужные товары среди проверенных магазинов или откройте свой.
 						</p>
 						<div className="flex gap-3">
 							<Button variant="secondary" onClick={() => navigate('/catalog')}>Начать покупки</Button>
@@ -221,7 +221,12 @@ export default function Home() {
 										</div>
 										<h3 className="font-bold text-lg mb-1">{store.name}</h3>
 										<p className="text-xs text-text-secondary mb-3 line-clamp-2">{store.description}</p>
-										<Badge variant="info">{store.products_count || 0} товаров</Badge>
+										<div className="flex items-center gap-2 flex-wrap">
+											{store.is_verified ? (
+												<Badge variant="success">Проверенный продавец</Badge>
+											) : null}
+											<Badge variant="info">{store.products_count || 0} товаров</Badge>
+										</div>
 									</div>
 								</div>
 							))

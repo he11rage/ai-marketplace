@@ -3,6 +3,31 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Button from '../components/ui/Button';
 import { apiEndpoints } from '../api/axios';
 
+const ORDER_STATUS_LABELS = {
+  created: 'Создан',
+  awaiting_payment: 'Ожидает оплаты',
+  paid: 'Оплачен',
+  processing: 'В обработке',
+  shipped: 'Отправлен',
+  delivered: 'Доставлен',
+  cancelled: 'Отменён',
+  refunded: 'Возврат',
+};
+
+const ADMIN_ORDER_ACTIONS = {
+  paid: [{ status: 'processing', label: 'В обработку' }],
+  processing: [
+    { status: 'shipped', label: 'Отправлен' },
+    { status: 'cancelled', label: 'Отменить' },
+  ],
+  shipped: [
+    { status: 'delivered', label: 'Доставлен' },
+    { status: 'cancelled', label: 'Отменить' },
+  ],
+  awaiting_payment: [{ status: 'cancelled', label: 'Отменить' }],
+  created: [{ status: 'cancelled', label: 'Отменить' }],
+};
+
 function StatusPill({ status }) {
   const map = {
     created: 'bg-[#8E8E93]/10 text-[#8E8E93]',
@@ -16,7 +41,7 @@ function StatusPill({ status }) {
   };
   return (
     <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${map[status] || 'bg-[#F2F2F7] text-text-secondary'}`}>
-      {status || '—'}
+      {ORDER_STATUS_LABELS[status] || status || '—'}
     </span>
   );
 }
@@ -51,14 +76,11 @@ export default function AdminModerationOrders() {
             className="bg-[#F2F2F7] rounded-xl px-3 py-2 text-sm outline-none"
           >
             <option value="">(все статусы)</option>
-            <option value="created">created</option>
-            <option value="awaiting_payment">awaiting_payment</option>
-            <option value="paid">paid</option>
-            <option value="processing">processing</option>
-            <option value="shipped">shipped</option>
-            <option value="delivered">delivered</option>
-            <option value="cancelled">cancelled</option>
-            <option value="refunded">refunded</option>
+            {Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -90,10 +112,15 @@ export default function AdminModerationOrders() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap justify-end">
-                  <Button variant="secondary" onClick={() => setOrderStatus(o.id, 'processing')}>processing</Button>
-                  <Button variant="secondary" onClick={() => setOrderStatus(o.id, 'shipped')}>shipped</Button>
-                  <Button variant="secondary" onClick={() => setOrderStatus(o.id, 'delivered')}>delivered</Button>
-                  <Button variant="secondary" onClick={() => setOrderStatus(o.id, 'cancelled')}>cancelled</Button>
+                  {(ADMIN_ORDER_ACTIONS[o.status] || []).map((action) => (
+                    <Button
+                      key={action.status}
+                      variant="secondary"
+                      onClick={() => setOrderStatus(o.id, action.status)}
+                    >
+                      {action.label}
+                    </Button>
+                  ))}
                 </div>
               </div>
 

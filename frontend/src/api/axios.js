@@ -99,6 +99,8 @@ export const apiEndpoints = {
 
     // Categories
     getCategories: () => api.get('/api/categories/'),
+    createCategory: (data) => api.post('/api/categories/', data),
+    updateCategory: (id, data) => api.patch(`/api/categories/${id}/`, data),
 
     // Cart
     getCart: () => api.get('/api/cart/'),
@@ -144,6 +146,10 @@ export const apiEndpoints = {
     // Moderation (admin)
     moderationListProducts: (params = {}) => api.get('/api/moderation/products/', { params }),
     moderationSetProductStatus: (id, data) => api.post(`/api/moderation/products/${id}/set_status/`, data),
+
+    moderationListCategories: (params = {}) => api.get('/api/moderation/categories/', { params }),
+    moderationVerifyCategory: (id) => api.post(`/api/moderation/categories/${id}/verify/`),
+    moderationRejectCategory: (id, data) => api.post(`/api/moderation/categories/${id}/reject/`, data),
 
     moderationListStores: (params = {}) => api.get('/api/moderation/stores/', { params }),
     moderationPatchStore: (id, data) => api.patch(`/api/moderation/stores/${id}/`, data),

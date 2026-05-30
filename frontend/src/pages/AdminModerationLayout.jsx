@@ -3,6 +3,7 @@ import Button from '../components/ui/Button';
 
 const nav = [
   { to: '/admin/moderation/products', label: 'Очередь товаров' },
+  { to: '/admin/moderation/categories', label: 'Очередь категорий' },
   { to: '/admin/moderation/stores', label: 'Очередь магазинов' },
   { to: '/admin/moderation/orders', label: 'Очередь заказов' },
   { to: '/admin/moderation/reports', label: 'Жалобы' },
@@ -41,7 +42,7 @@ export default function AdminModerationLayout() {
           </div>
           <h1 className="text-3xl font-bold mb-2">Модерация</h1>
           <p className="text-text-secondary max-w-2xl">
-            Очереди и инструменты модератора: товары, магазины, заказы, жалобы, пользователи, аудит и AI‑история.
+            Очереди и инструменты модератора: товары, категории, магазины, заказы, жалобы, пользователи, аудит и AI‑история.
           </p>
         </div>
 

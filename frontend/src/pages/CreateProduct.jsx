@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { apiEndpoints, api } from '../api/axios';
+import { apiEndpoints } from '../api/axios';
 import Button from '../components/ui/Button';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -131,7 +131,7 @@ export default function CreateProduct() {
         if (!newCategoryName.trim()) return;
         setIsCreatingCategory(true);
         try {
-            const response = await api.post('/api/categories/', { name: newCategoryName.trim() });
+            const response = await apiEndpoints.createCategory({ name: newCategoryName.trim() });
             const newCategory = response.data;
             setFormData(prev => ({ ...prev, category: newCategory.id.toString() }));
             setNewCategoryName('');
@@ -240,7 +240,6 @@ export default function CreateProduct() {
                             <input type="number" name="price" value={formData.price} onChange={handleInputChange} placeholder="Цена (₽)" className="px-4 py-2.5 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm focus:bg-white focus:border-[#007AFF] outline-none transition" required step="0.01" min="0" />
                             {(isEditMode || formData.old_price) && (<input type="number" name="old_price" value={formData.old_price} onChange={handleInputChange} placeholder="Старая цена (₽)" className="px-4 py-2.5 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm focus:bg-white focus:border-[#007AFF] outline-none transition" step="0.01" min="0" />)}
                         </div>
-                        {!isEditMode && !formData.old_price && (<button type="button" onClick={() => setFormData(prev => ({ ...prev, old_price: '' }))} className="text-sm text-[#007AFF] hover:underline">+ Добавить старую цену (скидка)</button>)}
                         <textarea name="description" value={formData.description} onChange={handleInputChange} rows="4" placeholder="Описание товара..." className="w-full px-4 py-2.5 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm focus:bg-white focus:border-[#007AFF] outline-none transition resize-none"></textarea>
                     </div>
                 </div>
@@ -250,7 +249,7 @@ export default function CreateProduct() {
                         <h2 className="text-lg font-bold">Параметры</h2>
                         <div className="space-y-2">
                             {!showNewCategory ? (
-                                <><select name="category" value={formData.category} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm focus:bg-white focus:border-[#007AFF] outline-none transition"><option value="">Выберите категорию</option>{categories?.map(cat => (<option key={cat.id} value={cat.id}>{cat.name}</option>))}</select><button type="button" onClick={() => setShowNewCategory(true)} className="text-sm text-[#007AFF] hover:underline">+ Создать новую категорию</button></>
+                                <><select name="category" value={formData.category} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm focus:bg-white focus:border-[#007AFF] outline-none transition"><option value="">Выберите категорию</option>{categories?.map(cat => (<option key={cat.id} value={cat.id}>{cat.name}{cat.is_verified === false ? ' (на проверке)' : ''}</option>))}</select><button type="button" onClick={() => setShowNewCategory(true)} className="text-sm text-[#007AFF] hover:underline">+ Создать новую категорию</button>{selectedCategory?.is_verified === false && (<p className="text-xs text-[#FF9500]">Кастомная категория будет проверена модератором вместе с товаром.</p>)}</>
                             ) : (
                                 <div className="flex gap-2">
                                     <input type="text" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="Название категории" className="flex-1 px-4 py-2.5 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm focus:bg-white focus:border-[#007AFF] outline-none transition" autoFocus onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateCategory(); } if (e.key === 'Escape') { setShowNewCategory(false); setNewCategoryName(''); } }} />

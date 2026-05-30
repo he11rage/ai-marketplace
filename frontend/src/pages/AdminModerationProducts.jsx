@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Button from '../components/ui/Button';
 import { apiEndpoints } from '../api/axios';
@@ -35,7 +36,10 @@ export default function AdminModerationProducts() {
   const items = useMemo(() => (Array.isArray(data) ? data : (data?.results ?? [])), [data]);
 
   const setProductStatus = async (id, next) => {
-    const reason = window.prompt('Причина модерации (необязательно):', '') ?? '';
+    const needsReason = ['draft', 'rejected', 'blocked'].includes(next);
+    const reason = needsReason
+      ? (window.prompt('Причина модерации (необязательно):', '') ?? '')
+      : '';
     await apiEndpoints.moderationSetProductStatus(id, { status: next, reason });
     await qc.invalidateQueries({ queryKey: ['moderation', 'products'] });
   };
@@ -87,7 +91,23 @@ export default function AdminModerationProducts() {
                   <span>магазин: <span className="font-medium text-text-primary">{p.store_name}</span> (#{p.store_id})</span>
                   <span className="text-[#E5E5EA]">•</span>
                   <span>продавец: <span className="font-medium text-text-primary">{p.owner_username}</span> (#{p.owner_id})</span>
+                  {p.category_name && (
+                    <>
+                      <span className="text-[#E5E5EA]">•</span>
+                      <span>категория: <span className="font-medium text-text-primary">{p.category_name}</span></span>
+                    </>
+                  )}
                 </div>
+                {p.category_needs_verification && (
+                  <div className="mt-2 flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-[#FF9500]/10 text-[#FF9500]">
+                      Кастомная категория — требует проверки
+                    </span>
+                    <Link to="/admin/moderation/categories" className="text-sm text-[#007AFF] hover:underline">
+                      Открыть очередь категорий
+                    </Link>
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <Button variant="secondary" onClick={() => setProductStatus(p.id, 'active')}>

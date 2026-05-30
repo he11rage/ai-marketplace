@@ -32,8 +32,6 @@ def _parse_decimal(raw):
 
 SELLER_ORDER_STATUS_TRANSITIONS = {
     Order.STATUS_PAID: {Order.STATUS_PROCESSING},
-    Order.STATUS_PROCESSING: {Order.STATUS_SHIPPED},
-    Order.STATUS_SHIPPED: {Order.STATUS_DELIVERED},
 }
 
 
@@ -49,7 +47,15 @@ class SellerProductViewSet(viewsets.ModelViewSet):
             .order_by("-created_at")
         )
         status_filter = (self.request.query_params.get("status") or "").strip()
-        if status_filter:
+        if status_filter == Product.STATUS_ARCHIVED:
+            qs = qs.filter(
+                status__in=[
+                    Product.STATUS_ARCHIVED,
+                    Product.STATUS_REJECTED,
+                    Product.STATUS_BLOCKED,
+                ]
+            )
+        elif status_filter:
             qs = qs.filter(status=status_filter)
         store_id = self.request.query_params.get("store")
         if store_id:
@@ -114,7 +120,18 @@ class SellerProductViewSet(viewsets.ModelViewSet):
             )
         before = product.status
         product.status = Product.STATUS_PENDING_MODERATION
-        product.save(update_fields=["status", "updated_at"])
+        product.moderated_by = None
+        product.moderated_at = None
+        product.moderation_reason = ""
+        product.save(
+            update_fields=[
+                "status",
+                "moderated_by",
+                "moderated_at",
+                "moderation_reason",
+                "updated_at",
+            ]
+        )
         ProductChangeLog.objects.create(
             product=product,
             changed_by=request.user,
@@ -215,10 +232,9 @@ class SellerOrderViewSet(viewsets.ReadOnlyModelViewSet):
             raise NotFound()
 
         new_status = (request.data or {}).get("status")
-        allowed_targets = {Order.STATUS_PROCESSING, Order.STATUS_SHIPPED, Order.STATUS_DELIVERED}
-        if new_status not in allowed_targets:
+        if new_status != Order.STATUS_PROCESSING:
             return Response(
-                {"detail": "Продавец может переводить заказ только в processing, shipped или delivered."},
+                {"detail": "Продавец может только отправить оплаченный заказ на склад (статус «В обработке»)."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

@@ -1,4 +1,7 @@
+from django.db.models import Sum
 from rest_framework import serializers
+
+from api.orders.models import Order, OrderItem
 from .models import Store
 
 class StoreSerializer(serializers.ModelSerializer):
@@ -6,6 +9,7 @@ class StoreSerializer(serializers.ModelSerializer):
     owner_id = serializers.ReadOnlyField(source='owner.id')
     slug = serializers.SlugField(read_only=True)
     products_count = serializers.SerializerMethodField()
+    total_sales = serializers.SerializerMethodField()
     rating = serializers.SerializerMethodField()
     rating_auto = serializers.DecimalField(source="rating", max_digits=2, decimal_places=1, read_only=True)
     
@@ -14,7 +18,8 @@ class StoreSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'owner', 'owner_id', 'name', 'slug', 'description',
             'logo', 'is_verified', 'rating', 'rating_auto', 'rating_manual',
-            'review_count', 'status', 'created_at', 'updated_at', 'products_count'
+            'review_count', 'status', 'created_at', 'updated_at', 'products_count',
+            'total_sales',
         ]
         read_only_fields = ['owner', 'rating', 'rating_auto', 'review_count', 'status', 'created_at', 'updated_at', 'slug']
 
@@ -42,6 +47,18 @@ class StoreSerializer(serializers.ModelSerializer):
     
     def get_products_count(self, obj):
         return obj.products.count()
+
+    def get_total_sales(self, obj):
+        annotated = getattr(obj, "total_sales", None)
+        if annotated is not None:
+            return int(annotated)
+        total = (
+            OrderItem.objects.filter(
+                product__store_id=obj.id,
+                order__status__in=Order.SALES_COUNT_STATUSES,
+            ).aggregate(total=Sum("quantity"))["total"]
+        )
+        return int(total or 0)
 
     def get_rating(self, obj):
         return obj.rating_effective

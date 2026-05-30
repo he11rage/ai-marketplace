@@ -85,11 +85,53 @@ class SellerCabinetTests(APITestCase):
 
     def test_seller_submits_draft(self):
         self.client.force_authenticate(self.seller)
+        self.product.moderation_reason = "Добавьте фото"
+        self.product.save(update_fields=["moderation_reason"])
         url = reverse("seller-products-submit", kwargs={"pk": self.product.id})
         response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.product.refresh_from_db()
         self.assertEqual(self.product.status, Product.STATUS_PENDING_MODERATION)
+        self.assertEqual(self.product.moderation_reason, "")
+
+    def test_seller_sees_moderation_reason(self):
+        self.product.moderation_reason = "Нужно указать бренд"
+        self.product.save(update_fields=["moderation_reason"])
+        self.client.force_authenticate(self.seller)
+        response = self.client.get(reverse("seller-products-list"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        draft = next(item for item in response.data if item["id"] == self.product.id)
+        self.assertEqual(draft["moderation_reason"], "Нужно указать бренд")
+
+    def test_seller_archive_tab_includes_rejected_and_blocked(self):
+        rejected = Product.objects.create(
+            store=self.store,
+            category=self.category,
+            name="Rejected Phone",
+            description="Rejected",
+            price="150.00",
+            stock_quantity=1,
+            status=Product.STATUS_REJECTED,
+            moderation_reason="Нарушение правил",
+            embedding=[0.0] * 1024,
+        )
+        blocked = Product.objects.create(
+            store=self.store,
+            category=self.category,
+            name="Blocked Phone",
+            description="Blocked",
+            price="160.00",
+            stock_quantity=1,
+            status=Product.STATUS_BLOCKED,
+            moderation_reason="Запрещённый товар",
+            embedding=[0.0] * 1024,
+        )
+        self.client.force_authenticate(self.seller)
+        response = self.client.get(reverse("seller-products-list"), {"status": "archived"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = {item["id"] for item in response.data}
+        self.assertIn(rejected.id, ids)
+        self.assertIn(blocked.id, ids)
 
     def test_seller_archives_and_restores_product(self):
         self.client.force_authenticate(self.seller)
@@ -161,6 +203,29 @@ class SellerCabinetTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         order.refresh_from_db()
         self.assertEqual(order.status, Order.STATUS_PROCESSING)
+
+    def test_seller_cannot_set_shipped_or_delivered(self):
+        order = Order.objects.create(
+            buyer=self.buyer,
+            total_amount="200.00",
+            status=Order.STATUS_PROCESSING,
+            delivery_address="Test address",
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=self.active_product,
+            quantity=1,
+            price="200.00",
+        )
+
+        self.client.force_authenticate(self.seller)
+        url = reverse("seller-orders-set-status", kwargs={"pk": order.id})
+        for target in (Order.STATUS_SHIPPED, Order.STATUS_DELIVERED):
+            with self.subTest(status=target):
+                response = self.client.post(url, {"status": target}, format="json")
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                order.refresh_from_db()
+                self.assertEqual(order.status, Order.STATUS_PROCESSING)
 
     def test_seller_edit_active_product_goes_to_pending_moderation(self):
         self.client.force_authenticate(self.seller)

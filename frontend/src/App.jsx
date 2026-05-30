@@ -15,6 +15,7 @@ import Admin from './pages/Admin';
 import AdminPanel from './pages/AdminPanel';
 import AdminModerationLayout from './pages/AdminModerationLayout';
 import AdminModerationProducts from './pages/AdminModerationProducts';
+import AdminModerationCategories from './pages/AdminModerationCategories';
 import AdminModerationStores from './pages/AdminModerationStores';
 import AdminModerationOrders from './pages/AdminModerationOrders';
 import AdminModerationReports from './pages/AdminModerationReports';
@@ -48,6 +49,7 @@ function App() {
           <Route path="/admin-panel" element={<AdminRoute><AdminPanel /></AdminRoute>} />
           <Route path="/admin/moderation" element={<AdminRoute><AdminModerationLayout /></AdminRoute>}>
             <Route path="products" element={<AdminModerationProducts />} />
+            <Route path="categories" element={<AdminModerationCategories />} />
             <Route path="stores" element={<AdminModerationStores />} />
             <Route path="orders" element={<AdminModerationOrders />} />
             <Route path="reports" element={<AdminModerationReports />} />

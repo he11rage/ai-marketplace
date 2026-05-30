@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from api.ai_chat.models import AIChatHistory
+from api.categories.models import Category
 from api.orders.models import Order, OrderItem
 from api.products.models import Product
 from api.stores.models import Store
@@ -36,6 +37,10 @@ class ProductModerationSerializer(serializers.ModelSerializer):
     store_id = serializers.IntegerField(source="store.id", read_only=True)
     owner_id = serializers.IntegerField(source="store.owner.id", read_only=True)
     owner_username = serializers.CharField(source="store.owner.username", read_only=True)
+    category_id = serializers.IntegerField(source="category.id", read_only=True, allow_null=True)
+    category_name = serializers.CharField(source="category.name", read_only=True, allow_null=True)
+    category_is_verified = serializers.BooleanField(source="category.is_verified", read_only=True, allow_null=True)
+    category_needs_verification = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -56,10 +61,38 @@ class ProductModerationSerializer(serializers.ModelSerializer):
             "store_name",
             "owner_id",
             "owner_username",
+            "category_id",
+            "category_name",
+            "category_is_verified",
+            "category_needs_verification",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["moderated_by", "moderated_at", "moderation_reason"]
+
+    def get_category_needs_verification(self, obj):
+        category = getattr(obj, "category", None)
+        return bool(category and not category.is_verified)
+
+
+class CategoryModerationSerializer(serializers.ModelSerializer):
+    created_by_id = serializers.IntegerField(source="created_by.id", read_only=True, allow_null=True)
+    created_by_username = serializers.CharField(source="created_by.username", read_only=True, allow_null=True)
+    products_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Category
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "description",
+            "is_verified",
+            "created_by_id",
+            "created_by_username",
+            "products_count",
+        ]
+        read_only_fields = fields
 
 
 class StoreModerationSerializer(serializers.ModelSerializer):
