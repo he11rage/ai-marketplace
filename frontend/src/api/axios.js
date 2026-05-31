@@ -80,6 +80,7 @@ export const apiEndpoints = {
     getProducts: (params = {}) => api.get('/api/products/', { params }),
     getProductBrands: () => api.get('/api/products/brands/'),
     getProduct: (id) => api.get(`/api/products/${id}/`),
+    getSimilarProducts: (id, params = {}) => api.get(`/api/products/${id}/similar/`, { params }),
     createProduct: (data) => api.post('/api/products/', data),  // FormData
     updateProduct: (id, data) => api.patch(`/api/products/${id}/`, data),  // FormData
     deleteProduct: (id) => api.delete(`/api/products/${id}/`),

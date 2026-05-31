@@ -1,3 +1,5 @@
+from django.contrib.postgres.search import SearchVectorField
+from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 from pgvector.django import VectorField
 from api.stores.models import Store
@@ -5,6 +7,7 @@ from api.categories.models import Category
 from django.conf import settings
 
 from ml.embeddings import get_embedding
+from ml.search_vector import build_product_search_vector
 
 
 class Product(models.Model):
@@ -56,6 +59,7 @@ class Product(models.Model):
     moderated_at = models.DateTimeField(null=True, blank=True)
     moderation_reason = models.TextField(blank=True, default="")
     embedding = VectorField(dimensions=1024, null=True, blank=True)
+    search_vector = SearchVectorField(null=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -63,6 +67,9 @@ class Product(models.Model):
         db_table = "products"
         verbose_name = "Product"
         verbose_name_plural = "Products"
+        indexes = [
+            GinIndex(fields=["search_vector"], name="products_search_vector_gin"),
+        ]
 
     def __str__(self):
         return self.name
@@ -74,6 +81,10 @@ class Product(models.Model):
             self.embedding = get_embedding(text)
 
         super().save(*args, **kwargs)
+
+        vector = build_product_search_vector(self)
+        Product.objects.filter(pk=self.pk).update(search_vector=vector)
+        self.search_vector = vector
 
 
 class ProductQuestion(models.Model):

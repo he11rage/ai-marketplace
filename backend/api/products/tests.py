@@ -1,3 +1,4 @@
+import math
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -9,6 +10,14 @@ from api.categories.models import Category
 from api.products.models import Product
 from api.stores.models import Store
 from api.users.roles import UserRole
+
+
+def _unit_embedding(first: float = 1.0, second: float = 0.0) -> list[float]:
+    vector = [0.0] * 1024
+    vector[0] = first
+    vector[1] = second
+    norm = math.sqrt(sum(value * value for value in vector))
+    return [value / norm for value in vector]
 
 
 User = get_user_model()
@@ -320,6 +329,110 @@ class ProductStoreModerationVisibilityTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 0)
+
+
+class ProductSimilarEndpointTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="similar_owner", password="pass12345")
+        self.store = Store.objects.create(
+            owner=self.owner, name="Similar Store", status=Store.STATUS_ACTIVE
+        )
+        self.category = Category.objects.create(name="Gadgets")
+        self.target = Product.objects.create(
+            store=self.store,
+            category=self.category,
+            name="Target Phone",
+            description="Main product",
+            price="200.00",
+            stock_quantity=5,
+            status=Product.STATUS_ACTIVE,
+            embedding=_unit_embedding(1.0, 0.0),
+        )
+        self.close_match = Product.objects.create(
+            store=self.store,
+            category=self.category,
+            name="Close Match Phone",
+            description="Very similar embedding",
+            price="210.00",
+            stock_quantity=3,
+            status=Product.STATUS_ACTIVE,
+            embedding=_unit_embedding(0.99, 0.01),
+        )
+        self.orthogonal = Product.objects.create(
+            store=self.store,
+            category=self.category,
+            name="Unrelated Laptop",
+            description="Different embedding direction",
+            price="900.00",
+            stock_quantity=2,
+            status=Product.STATUS_ACTIVE,
+            embedding=_unit_embedding(0.0, 1.0),
+        )
+        self.similar_url = reverse("product-similar", kwargs={"pk": self.target.id})
+
+    def test_similar_endpoint_returns_close_embedding_matches(self):
+        response = self.client.get(self.similar_url, {"limit": 4})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        names = [item["name"] for item in response.data]
+        self.assertIn("Close Match Phone", names)
+        self.assertNotIn("Target Phone", names)
+        self.assertNotIn("Unrelated Laptop", names)
+
+    def test_similar_endpoint_respects_limit(self):
+        for index in range(3):
+            Product.objects.create(
+                store=self.store,
+                category=self.category,
+                name=f"Variant {index}",
+                description="Near duplicate",
+                price="205.00",
+                stock_quantity=1,
+                status=Product.STATUS_ACTIVE,
+                embedding=_unit_embedding(0.98, 0.02 + index * 0.001),
+            )
+
+        response = self.client.get(self.similar_url, {"limit": 2})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+
+    @patch("api.products.models.get_embedding", return_value=[0.0] * 1024)
+    def test_similar_endpoint_empty_when_no_embedding(self, _embedding_mock):
+        no_embedding = Product.objects.create(
+            store=self.store,
+            category=self.category,
+            name="No Vector",
+            description="Missing embedding",
+            price="50.00",
+            stock_quantity=1,
+            status=Product.STATUS_ACTIVE,
+            embedding=None,
+        )
+        Product.objects.filter(pk=no_embedding.pk).update(embedding=None)
+        url = reverse("product-similar", kwargs={"pk": no_embedding.id})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, [])
+
+    def test_similar_endpoint_excludes_inactive_products(self):
+        Product.objects.create(
+            store=self.store,
+            category=self.category,
+            name="Draft Twin",
+            description="Pending",
+            price="199.00",
+            stock_quantity=1,
+            status=Product.STATUS_PENDING_MODERATION,
+            embedding=_unit_embedding(0.99, 0.01),
+        )
+
+        response = self.client.get(self.similar_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        names = {item["name"] for item in response.data}
+        self.assertNotIn("Draft Twin", names)
 
 
 class ProductQuestionsAndHistoryTests(APITestCase):

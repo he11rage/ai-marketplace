@@ -180,7 +180,8 @@ export default function Catalog() {
     queryKey: ['products', 'catalog', productFilters],
     queryFn: () =>
       apiEndpoints.getProducts(productFilters).then((res) => parseProductsResponse(res.data)),
-    placeholderData: (previousData) => previousData,
+    // Не показывать полный каталог, пока грузится новый поисковый запрос
+    placeholderData: searchQuery ? undefined : (previousData) => previousData,
   });
 
   const products = productsPage?.results ?? [];

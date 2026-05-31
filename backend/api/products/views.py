@@ -9,6 +9,13 @@ from rest_framework.decorators import action
 from django.db.models import Q, Sum, OuterRef, Subquery, IntegerField, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
+from ml.config import (
+    HYBRID_SEARCH_CATALOG_MIN_VECTOR_SIMILARITY,
+    SIMILAR_PRODUCTS_DEFAULT_LIMIT,
+    SIMILAR_PRODUCTS_MAX_LIMIT,
+)
+from ml.hybrid_search import hybrid_search_products
+from ml.rag_pipeline import get_similar_products
 from .moderation import seller_update_moderation_fields
 from .models import Product, WishlistItem, ProductQuestion, ProductChangeLog
 from .pagination import OptionalPageNumberPagination
@@ -66,7 +73,12 @@ def _is_truthy(raw):
             OpenApiParameter("in_stock", OpenApiTypes.BOOL, OpenApiParameter.QUERY, description="Only products with stock_quantity > 0."),
             OpenApiParameter("brand", OpenApiTypes.STR, OpenApiParameter.QUERY, description="Filter by brand (single value or comma-separated list)."),
             OpenApiParameter("brands", OpenApiTypes.STR, OpenApiParameter.QUERY, description="Comma-separated brand names."),
-            OpenApiParameter("search", OpenApiTypes.STR, OpenApiParameter.QUERY, description="Search by product, brand, category, or store name."),
+            OpenApiParameter(
+                "search",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description="Hybrid search: PostgreSQL full-text (ts_rank) + vector embeddings.",
+            ),
             OpenApiParameter(
                 "ordering",
                 OpenApiTypes.STR,
@@ -90,7 +102,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     
     # Public read access, authenticated write access.
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'brands', 'questions', 'create_question']:
+        if self.action in ['list', 'retrieve', 'brands', 'questions', 'create_question', 'similar']:
             return [AllowAny()]
         return [IsAuthenticated()]
 
@@ -150,16 +162,17 @@ class ProductViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(brand_query)
 
         search = self.request.query_params.get('search')
-        if search:
-            queryset = queryset.filter(
-                Q(name__icontains=search) |
-                Q(description__icontains=search) |
-                Q(brand__icontains=search) |
-                Q(category__name__icontains=search) |
-                Q(store__name__icontains=search)
-            )
-
         ordering = self.request.query_params.get('ordering')
+        hybrid_search_ordering = False
+
+        if search:
+            hybrid_search_ordering = ordering in (None, '', 'relevance')
+            queryset = hybrid_search_products(
+                queryset,
+                search,
+                min_vector_similarity=HYBRID_SEARCH_CATALOG_MIN_VECTOR_SIMILARITY,
+                apply_ordering=hybrid_search_ordering,
+            )
         allowed_ordering = {
             'price', '-price', 'created_at', '-created_at', 'rating', '-rating', 'popular', 'relevance',
         }
@@ -177,10 +190,9 @@ class ProductViewSet(viewsets.ModelViewSet):
                     Value(0)
                 )
             ).order_by('-review_count', '-store_popularity', '-created_at')
-        elif ordering == 'relevance':
-            # Relevance ranking prioritizes reviewed products.
+        elif ordering == 'relevance' and not hybrid_search_ordering:
             queryset = queryset.order_by('-review_count', '-rating', '-created_at')
-        elif ordering in allowed_ordering:
+        elif ordering in allowed_ordering and not hybrid_search_ordering:
             queryset = queryset.order_by(ordering)
 
         if self.action in ("list", "brands"):
@@ -209,6 +221,51 @@ class ProductViewSet(viewsets.ModelViewSet):
             if not can_view:
                 raise NotFound()
         serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
+    @extend_schema(
+        tags=["products"],
+        parameters=[
+            OpenApiParameter(
+                "limit",
+                OpenApiTypes.INT,
+                OpenApiParameter.QUERY,
+                description=(
+                    f"Max similar products to return (default {SIMILAR_PRODUCTS_DEFAULT_LIMIT}, "
+                    f"max {SIMILAR_PRODUCTS_MAX_LIMIT})."
+                ),
+            ),
+        ],
+        responses={200: ProductSerializer(many=True)},
+        description="Similar products by vector embedding cosine similarity (pgvector).",
+    )
+    @action(detail=True, methods=["get"], url_path="similar")
+    def similar(self, request, pk=None):
+        product = self.get_object()
+        is_publicly_visible = (
+            product.status == Product.STATUS_ACTIVE
+            and product.store.status == Store.STATUS_ACTIVE
+        )
+        if not is_publicly_visible:
+            user = request.user
+            can_view = (
+                user.is_authenticated
+                and (
+                    is_platform_admin(user)
+                    or (is_seller(user) and product.store.owner_id == user.id)
+                )
+            )
+            if not can_view:
+                raise NotFound()
+
+        try:
+            limit = int(request.query_params.get("limit", SIMILAR_PRODUCTS_DEFAULT_LIMIT))
+        except (TypeError, ValueError):
+            limit = SIMILAR_PRODUCTS_DEFAULT_LIMIT
+        limit = max(1, min(limit, SIMILAR_PRODUCTS_MAX_LIMIT))
+
+        similar_qs = get_similar_products(product.id, limit=limit)
+        serializer = ProductSerializer(similar_qs, many=True, context={"request": request})
         return Response(serializer.data)
 
     @extend_schema(tags=["products"], responses={200: {"type": "array", "items": {"type": "string"}}})

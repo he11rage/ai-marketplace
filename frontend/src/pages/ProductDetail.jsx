@@ -69,15 +69,15 @@ export default function ProductDetail() {
     ? product.category?.id
     : product?.category;
 
+  const RELATED_PRODUCTS_PREVIEW_LIMIT = 4;
   const { data: relatedProducts = [], isLoading: isRelatedLoading } = useQuery({
-    queryKey: ['related-products', id, productCategoryId],
+    queryKey: ['similar-products', id],
     queryFn: () =>
       apiEndpoints
-        .getProducts({ category: productCategoryId, ordering: 'relevance' })
-        .then((res) => (res.data || []).filter((item) => item.id !== Number(id))),
-    enabled: Boolean(productCategoryId && id),
+        .getSimilarProducts(id, { limit: RELATED_PRODUCTS_PREVIEW_LIMIT + 4 })
+        .then((res) => res.data || []),
+    enabled: Boolean(id),
   });
-  const RELATED_PRODUCTS_PREVIEW_LIMIT = 4;
   const visibleRelatedProducts = relatedProducts.slice(0, RELATED_PRODUCTS_PREVIEW_LIMIT);
   const hasMoreRelatedProducts = relatedProducts.length > RELATED_PRODUCTS_PREVIEW_LIMIT;
 
