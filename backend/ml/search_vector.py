@@ -4,9 +4,8 @@ from django.db.models import Value
 
 def build_product_search_vector(product):
     """Собирает tsvector для полнотекстового поиска по товару."""
-    vector = (
-        SearchVector("name", weight="A", config="russian")
-        + SearchVector("description", weight="B", config="russian")
+    vector = SearchVector("name", weight="A", config="russian") + SearchVector(
+        "description", weight="B", config="russian"
     )
     if product.brand:
         vector = vector + SearchVector("brand", weight="C", config="russian")

@@ -10,6 +10,7 @@ ENV/
 *.sqlite3
 *.log
 .mypy_cache/
+media/
 
 # Node.js
 node_modules/

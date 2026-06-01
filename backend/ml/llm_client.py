@@ -62,8 +62,9 @@ class GigaChatClient:
             print(f"❌ Ошибка GigaChat: {e}")
             return ""
 
-    def classify_intent(self, user_message: str, chat_history: list | None = None) -> str:
-        """Возвращает: search | chat | off_topic"""
+    def classify_intent(
+        self, user_message: str, chat_history: list | None = None
+    ) -> str:
         history_context = _format_history(chat_history)
         prompt = f"""Определи намерение последнего сообщения пользователя в диалоге с консультантом маркетплейса.
 Ответь РОВНО одним словом без пояснений:
@@ -83,10 +84,24 @@ class GigaChatClient:
             return "off_topic"
         if token == "CHAT":
             return "chat"
+        return "chat"
 
-    def is_ready_for_search(self, user_message: str, chat_history: list | None = None) -> bool:
+    def is_ready_for_search(
+        self, user_message: str, chat_history: list | None = None
+    ) -> bool:
         history_context = _format_history(chat_history)
-        confirm_words = ("да", "давай", "ищи", "запускай", "покажи", "найди", "ок", "окей", "ага", "конечно")
+        confirm_words = (
+            "да",
+            "давай",
+            "ищи",
+            "запускай",
+            "покажи",
+            "найди",
+            "ок",
+            "окей",
+            "ага",
+            "конечно",
+        )
         if user_message.strip().lower() in confirm_words or any(
             user_message.strip().lower().startswith(w) for w in confirm_words
         ):
@@ -112,7 +127,9 @@ class GigaChatClient:
         raw = self._chat(prompt)
         return _first_token(raw) == "YES"
 
-    def build_search_query(self, user_message: str, chat_history: list | None = None) -> str:
+    def build_search_query(
+        self, user_message: str, chat_history: list | None = None
+    ) -> str:
         history_context = _format_history(chat_history)
         prompt = f"""Сформируй короткий поисковый запрос для каталога товаров (8-20 слов, русский язык).
 Учти всю историю диалога и последнее сообщение. Только текст запроса, без кавычек и пояснений.
@@ -127,7 +144,26 @@ class GigaChatClient:
             query = user_message
         return query[:500]
 
-    def generate_consultant_response(self, user_message: str, chat_history: list | None = None) -> str:
+    def extract_product_category(
+        self, user_message: str, chat_history: list | None = None
+    ) -> str | None:
+        """Извлекает предполагаемую категорию для pre-filtering."""
+        history_context = _format_history(chat_history)
+        prompt = f"""Выдели ТИП/КАТЕГОРИЮ товара из запроса пользователя одним словом на русском.
+Если тип неясен, это общий вопрос или разговор не о конкретном товаре — верни NONE.
+Примеры: "книга", "ноутбук", "кроссовки", "монитор", "смартфон".
+Не пиши объяснений. Только слово или NONE.
+
+История: {history_context}
+Запрос: "{user_message}"
+Категория:"""
+        raw = self._chat(prompt)
+        cat = (raw or "").strip().lower().strip(".,!?\"'")
+        return None if cat in ("none", "", "н/д") else cat
+
+    def generate_consultant_response(
+        self, user_message: str, chat_history: list | None = None
+    ) -> str:
         history_context = _format_history(chat_history)
         prompt = f"""{CONSULTANT_BASE_PROMPT}
 
@@ -140,7 +176,9 @@ class GigaChatClient:
         text = self._chat(prompt)
         return text or "Извините, произошла техническая ошибка. Попробуйте позже."
 
-    def generate_chat_response(self, user_message: str, chat_history: list | None = None) -> str:
+    def generate_chat_response(
+        self, user_message: str, chat_history: list | None = None
+    ) -> str:
         history_context = _format_history(chat_history)
         prompt = f"""{CONSULTANT_BASE_PROMPT}
 
@@ -167,30 +205,27 @@ class GigaChatClient:
         )
 
     def generate_product_comment(
-        self,
-        product_data: dict,
-        search_query: str,
-        user_context: str = "",
+        self, product_data: dict, search_query: str, user_context: str = ""
     ) -> str:
-        prompt = f"""Ты консультант MarketFlow. Пользователь искал: {search_query}.
-Товар: название «{product_data.get('name')}», бренд «{product_data.get('brand') or '—'}»,
-цена {product_data.get('price')}₽, рейтинг {product_data.get('rating')},
-описание: {(product_data.get('description') or '')[:400]}.
+        prompt = f"""Ты консультант MarketFlow. Пользователь искал: "{search_query}".
+Товар: «{product_data.get("name")}», категория: «{product_data.get("category_name") or "—"}»,
+цена: {product_data.get("price")}₽, рейтинг: {product_data.get("rating")}.
 
-Напиши 1-2 коротких предложения: почему этот товар может подойти под запрос.
-Без приветствий и без перечисления всех характеристик подряд. Только суть.
+ПРАВИЛО: Если категория товара явно НЕ совпадает с типом из запроса 
+(искали книгу, а это электроника/одежда/аксессуар) — верни ТОЛЬКО слово: SKIP
+Иначе напиши 1 короткое предложение: почему товар подходит под запрос. Без приветствий.
 Ответ:"""
         text = self._chat(prompt)
-        if text:
-            return text
-        return f"Подходит под ваш запрос: {product_data.get('name')}."
+        return text.strip() if text else "SKIP"
 
     def generate_no_results_message(self, search_query: str) -> str:
         prompt = f"""{CONSULTANT_BASE_PROMPT}
 
 По запросу «{search_query}» в каталоге не нашлось подходящих товаров.
-Вежливо сообщи об этом (2-3 предложения), предложи уточнить критерии или поискать что-то близкое.
-Ответ:"""
+1. Честно скажи, что именно этой категории/модели сейчас нет.
+2. Предложи 1-2 смежные категории, которые есть в наличии.
+3. НЕ выдумывай товары и НЕ пиши «можно посмотреть на другом устройстве».
+Ответ (2-3 предложения):"""
         text = self._chat(prompt)
         return text or (
             "К сожалению, по вашему запросу на платформе пока нет подходящих товаров. "
