@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Button from '../components/ui/Button';
+import ModerationPreviewModal from '../components/ModerationPreviewModal';
+import ModerationActionModal from '../components/ModerationActionModal';
+import { STORE_STATUS_ACTIONS } from '../constants/moderationActions';
 import { apiEndpoints } from '../api/axios';
 
 function StatusPill({ status }) {
@@ -22,6 +25,9 @@ export default function AdminModerationStores() {
   const qc = useQueryClient();
   const [status, setStatus] = useState('pending_moderation');
   const [q, setQ] = useState('');
+  const [previewStore, setPreviewStore] = useState(null);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [actionSubmitting, setActionSubmitting] = useState(false);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['moderation', 'stores', { status, q }],
@@ -38,13 +44,26 @@ export default function AdminModerationStores() {
     await qc.invalidateQueries({ queryKey: ['moderation', 'stores'] });
   };
 
-  const setStoreStatus = async (id, next) => {
-    const needsReason = ['limited', 'rejected', 'blocked'].includes(next);
-    const reason = needsReason
-      ? (window.prompt('Причина модерации (необязательно):', '') ?? '')
-      : '';
+  const setStoreStatus = async (id, next, reason = '') => {
     await apiEndpoints.moderationSetStoreStatus(id, { status: next, reason });
     await qc.invalidateQueries({ queryKey: ['moderation', 'stores'] });
+  };
+
+  const openStoreAction = (store, next) => {
+    const config = STORE_STATUS_ACTIONS[next];
+    if (!config) return;
+    setPendingAction({ store, next, ...config });
+  };
+
+  const handleConfirmStoreAction = async (reason) => {
+    if (!pendingAction) return;
+    setActionSubmitting(true);
+    try {
+      await setStoreStatus(pendingAction.store.id, pendingAction.next, reason);
+      setPendingAction(null);
+    } finally {
+      setActionSubmitting(false);
+    }
   };
 
   return (
@@ -84,7 +103,14 @@ export default function AdminModerationStores() {
             <div key={s.id} className="p-5 flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <div className="font-semibold truncate">{s.name}</div>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewStore(s)}
+                    className="font-semibold truncate text-left text-[#007AFF] hover:underline max-w-full"
+                    title="Показать описание и логотип"
+                  >
+                    {s.name}
+                  </button>
                   <StatusPill status={s.status} />
                   {s.is_verified ? (
                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-[#34C759]/10 text-[#34C759]">
@@ -113,13 +139,13 @@ export default function AdminModerationStores() {
                 <Button variant="secondary" onClick={() => setStoreStatus(s.id, 'active')}>
                   Активировать
                 </Button>
-                <Button variant="secondary" onClick={() => setStoreStatus(s.id, 'limited')}>
+                <Button variant="secondary" onClick={() => openStoreAction(s, 'limited')}>
                   На доработку
                 </Button>
-                <Button variant="secondary" onClick={() => setStoreStatus(s.id, 'rejected')}>
+                <Button variant="secondary" onClick={() => openStoreAction(s, 'rejected')}>
                   Отклонить
                 </Button>
-                <Button variant="secondary" onClick={() => setStoreStatus(s.id, 'blocked')}>
+                <Button variant="secondary" onClick={() => openStoreAction(s, 'blocked')}>
                   Блок
                 </Button>
               </div>
@@ -127,6 +153,38 @@ export default function AdminModerationStores() {
           ))}
         </div>
       )}
+
+      <ModerationActionModal
+        open={Boolean(pendingAction)}
+        onClose={() => !actionSubmitting && setPendingAction(null)}
+        title={pendingAction?.title}
+        description={pendingAction?.description}
+        entityName={pendingAction?.store?.name}
+        entityLabel="Магазин"
+        confirmLabel={pendingAction?.confirmLabel}
+        confirmVariant={pendingAction?.confirmVariant}
+        onConfirm={handleConfirmStoreAction}
+        isSubmitting={actionSubmitting}
+      />
+
+      <ModerationPreviewModal
+        open={Boolean(previewStore)}
+        onClose={() => setPreviewStore(null)}
+        title={previewStore?.name}
+        description={previewStore?.description}
+        imageUrl={previewStore?.logo}
+        imageAlt={previewStore?.name}
+      >
+        {previewStore && (
+          <div className="text-xs text-text-secondary flex flex-wrap gap-x-2 gap-y-1">
+            <span>id: {previewStore.id}</span>
+            <span className="text-[#E5E5EA]">•</span>
+            <span>владелец: {previewStore.owner_username} (#{previewStore.owner_id})</span>
+            <span className="text-[#E5E5EA]">•</span>
+            <span>рейтинг: {Number(previewStore.rating ?? 0).toFixed(1)}</span>
+          </div>
+        )}
+      </ModerationPreviewModal>
     </div>
   );
 }

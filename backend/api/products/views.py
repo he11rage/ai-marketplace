@@ -4,7 +4,7 @@ from rest_framework import serializers, viewsets
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import NotFound, PermissionDenied
 from api.stores.models import Store
-from api.users.roles import is_platform_admin, is_seller
+from api.users.roles import is_admin_editing_other_users_resource, is_platform_admin, is_seller
 from rest_framework.decorators import action
 from django.db.models import Q, Sum, OuterRef, Subquery, IntegerField, Value
 from django.db.models.functions import Coalesce
@@ -317,7 +317,9 @@ class ProductViewSet(viewsets.ModelViewSet):
         original = getattr(product, "_original_for_audit", None)
         moderation_fields = seller_update_moderation_fields(
             product,
-            by_admin=is_platform_admin(self.request.user),
+            by_admin=is_admin_editing_other_users_resource(
+                self.request.user, product.store.owner_id
+            ),
         )
         updated = serializer.save(**moderation_fields)
 

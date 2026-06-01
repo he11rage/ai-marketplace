@@ -98,6 +98,110 @@ class StoreStatusTests(APITestCase):
         self.assertEqual(store.status, Store.STATUS_PENDING_MODERATION)
         self.assertEqual(response.data["status"], Store.STATUS_PENDING_MODERATION)
 
+    def test_seller_edit_rejected_store_goes_to_pending_moderation(self):
+        store = Store.objects.create(
+            owner=self.owner,
+            name="Rejected Store",
+            status=Store.STATUS_REJECTED,
+            moderation_reason="Добавьте описание магазина",
+        )
+        self.client.force_authenticate(self.owner)
+        detail_url = reverse("store-detail", args=[store.id])
+
+        response = self.client.patch(detail_url, {"description": "Исправленное описание"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], Store.STATUS_PENDING_MODERATION)
+        store.refresh_from_db()
+        self.assertEqual(store.status, Store.STATUS_PENDING_MODERATION)
+        self.assertEqual(store.description, "Исправленное описание")
+        self.assertEqual(store.moderation_reason, "")
+        self.assertIsNone(store.moderated_by)
+
+    def test_seller_edit_active_store_goes_to_pending_moderation(self):
+        store = Store.objects.create(
+            owner=self.owner,
+            name="Active Store",
+            status=Store.STATUS_ACTIVE,
+        )
+        self.client.force_authenticate(self.owner)
+        detail_url = reverse("store-detail", args=[store.id])
+
+        response = self.client.patch(detail_url, {"name": "Active Store v2"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], Store.STATUS_PENDING_MODERATION)
+        store.refresh_from_db()
+        self.assertEqual(store.status, Store.STATUS_PENDING_MODERATION)
+        self.assertEqual(store.name, "Active Store v2")
+
+    def test_admin_edit_rejected_store_keeps_status(self):
+        store = Store.objects.create(
+            owner=self.owner,
+            name="Rejected Store",
+            status=Store.STATUS_REJECTED,
+            moderation_reason="Нарушение правил",
+        )
+        admin = User.objects.create_user(
+            username="admin-store-edit",
+            password="pass12345",
+            role=UserRole.ADMIN,
+        )
+        self.client.force_authenticate(admin)
+        detail_url = reverse("store-detail", args=[store.id])
+
+        response = self.client.patch(detail_url, {"name": "Admin Renamed"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        store.refresh_from_db()
+        self.assertEqual(store.status, Store.STATUS_REJECTED)
+        self.assertEqual(store.moderation_reason, "Нарушение правил")
+        self.assertEqual(store.name, "Admin Renamed")
+
+    def test_seller_edit_limited_store_goes_to_pending_moderation(self):
+        store = Store.objects.create(
+            owner=self.owner,
+            name="Limited Store",
+            status=Store.STATUS_LIMITED,
+            moderation_reason="Уточните описание",
+        )
+        self.client.force_authenticate(self.owner)
+        detail_url = reverse("store-detail", args=[store.id])
+
+        response = self.client.patch(
+            detail_url,
+            {"description": "Исправленное описание", "name": store.name},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], Store.STATUS_PENDING_MODERATION)
+        store.refresh_from_db()
+        self.assertEqual(store.status, Store.STATUS_PENDING_MODERATION)
+        self.assertEqual(store.moderation_reason, "")
+
+    def test_admin_owner_edit_limited_own_store_goes_to_pending_moderation(self):
+        admin_owner = User.objects.create_user(
+            username="admin-owner-store",
+            password="pass12345",
+            role=UserRole.ADMIN,
+        )
+        store = Store.objects.create(
+            owner=admin_owner,
+            name="Admin Limited Store",
+            status=Store.STATUS_LIMITED,
+            moderation_reason="Добавьте логотип",
+        )
+        self.client.force_authenticate(admin_owner)
+        detail_url = reverse("store-detail", args=[store.id])
+
+        response = self.client.patch(detail_url, {"description": "Новое описание"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], Store.STATUS_PENDING_MODERATION)
+        store.refresh_from_db()
+        self.assertEqual(store.status, Store.STATUS_PENDING_MODERATION)
+
 
 class StoreCatalogVisibilityTests(APITestCase):
     def setUp(self):

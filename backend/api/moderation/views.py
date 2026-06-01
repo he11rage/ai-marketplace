@@ -88,6 +88,13 @@ class ProductModerationViewSet(viewsets.ModelViewSet):
         allowed = {c[0] for c in Product.STATUS_CHOICES}
         if new_status not in allowed:
             return Response({"detail": "Некорректный status."}, status=status.HTTP_400_BAD_REQUEST)
+        if new_status == Product.STATUS_ACTIVE:
+            category = getattr(product, "category", None)
+            if category and not category.is_verified:
+                return Response(
+                    {"detail": "Сначала одобрите категорию товара."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         before = product.status
         product.status = new_status
         product.moderated_by = request.user

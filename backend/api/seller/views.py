@@ -11,7 +11,7 @@ from api.products.moderation import seller_update_moderation_fields
 from api.products.models import Product, ProductChangeLog
 from api.products.serializers import ProductSerializer
 from api.stores.models import Store
-from api.users.roles import is_platform_admin
+from api.users.roles import is_admin_editing_other_users_resource, is_platform_admin
 
 from .permissions import IsSeller
 from .serializers import SellerOrderSerializer, SellerProductSerializer
@@ -98,7 +98,9 @@ class SellerProductViewSet(viewsets.ModelViewSet):
         before_status = product.status
         moderation_fields = seller_update_moderation_fields(
             product,
-            by_admin=is_platform_admin(self.request.user),
+            by_admin=is_admin_editing_other_users_resource(
+                self.request.user, product.store.owner_id
+            ),
         )
         updated = serializer.save(**moderation_fields)
         if before_status != updated.status:

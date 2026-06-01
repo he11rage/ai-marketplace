@@ -127,7 +127,8 @@ export default function CreateProduct() {
         }
     };
 
-    const handleCreateCategory = async () => {
+    const handleCreateCategory = async (e) => {
+        e?.preventDefault?.();
         if (!newCategoryName.trim()) return;
         setIsCreatingCategory(true);
         try {
@@ -136,7 +137,13 @@ export default function CreateProduct() {
             setFormData(prev => ({ ...prev, category: newCategory.id.toString() }));
             setNewCategoryName('');
             setShowNewCategory(false);
-            await queryClient.invalidateQueries(['categories']);
+            queryClient.setQueryData(['categories'], (old) => {
+                const list = Array.isArray(old) ? old : [];
+                if (list.some((c) => c.id === newCategory.id)) return list;
+                return [...list, newCategory].sort((a, b) =>
+                    (a.name || '').localeCompare(b.name || '', 'ru')
+                );
+            });
         } catch (error) {
             console.error('Ошибка создания категории:', error);
             alert('Не удалось создать категорию');
@@ -164,13 +171,13 @@ export default function CreateProduct() {
 
             if (isEditMode) {
                 await apiEndpoints.updateProduct(id, submitData);
-                await queryClient.invalidateQueries(['product', id]);
+                await queryClient.invalidateQueries({ queryKey: ['product', id] });
             } else {
                 await apiEndpoints.createProduct(submitData);
-                await queryClient.invalidateQueries(['products']);
-                await queryClient.invalidateQueries(['seller', 'products']);
+                await queryClient.invalidateQueries({ queryKey: ['products'] });
+                await queryClient.invalidateQueries({ queryKey: ['seller', 'products'] });
             }
-            await queryClient.invalidateQueries(['my-stores']);
+            await queryClient.invalidateQueries({ queryKey: ['my-stores'] });
             navigate(saveAsDraft ? '/seller' : '/account');
         } catch (error) {
             console.error('Save error:', error);
@@ -183,6 +190,10 @@ export default function CreateProduct() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (showNewCategory) {
+            await handleCreateCategory();
+            return;
+        }
         await saveProduct(false);
     };
 
@@ -251,8 +262,26 @@ export default function CreateProduct() {
                             {!showNewCategory ? (
                                 <><select name="category" value={formData.category} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm focus:bg-white focus:border-[#007AFF] outline-none transition"><option value="">Выберите категорию</option>{categories?.map(cat => (<option key={cat.id} value={cat.id}>{cat.name}{cat.is_verified === false ? ' (на проверке)' : ''}</option>))}</select><button type="button" onClick={() => setShowNewCategory(true)} className="text-sm text-[#007AFF] hover:underline">+ Создать новую категорию</button>{selectedCategory?.is_verified === false && (<p className="text-xs text-[#FF9500]">Кастомная категория будет проверена модератором вместе с товаром.</p>)}</>
                             ) : (
-                                <div className="flex gap-2">
-                                    <input type="text" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="Название категории" className="flex-1 px-4 py-2.5 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm focus:bg-white focus:border-[#007AFF] outline-none transition" autoFocus onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateCategory(); } if (e.key === 'Escape') { setShowNewCategory(false); setNewCategoryName(''); } }} />
+                                <div className="flex gap-2" onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}>
+                                    <input
+                                        type="text"
+                                        value={newCategoryName}
+                                        onChange={(e) => setNewCategoryName(e.target.value)}
+                                        placeholder="Название категории"
+                                        className="flex-1 px-4 py-2.5 rounded-xl bg-[#F2F2F7] border border-[#E5E5EA] text-sm focus:bg-white focus:border-[#007AFF] outline-none transition"
+                                        autoFocus
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                handleCreateCategory(e);
+                                            }
+                                            if (e.key === 'Escape') {
+                                                setShowNewCategory(false);
+                                                setNewCategoryName('');
+                                            }
+                                        }}
+                                    />
                                     <Button type="button" size="sm" onClick={handleCreateCategory} disabled={isCreatingCategory || !newCategoryName.trim()}>{isCreatingCategory ? '...' : 'Создать'}</Button>
                                     <Button type="button" variant="secondary" size="sm" onClick={() => { setShowNewCategory(false); setNewCategoryName(''); }}>Отмена</Button>
                                 </div>

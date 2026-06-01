@@ -7,7 +7,7 @@ export default function SellerRoute({ children }) {
   const location = useLocation();
   const token = localStorage.getItem('access_token');
 
-  const { data: user, isLoading, isFetching, isError } = useQuery({
+  const { data: user, isLoading, isError } = useQuery({
     queryKey: ['user'],
     queryFn: () => apiEndpoints.me().then((res) => res.data),
     enabled: !!token,
@@ -18,7 +18,7 @@ export default function SellerRoute({ children }) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  if (isLoading || isFetching) {
+  if (isLoading && !user) {
     return (
       <div className="max-w-[1440px] mx-auto px-6 py-20 text-center text-text-secondary">
         Проверяем права доступа...

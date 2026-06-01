@@ -3,7 +3,11 @@
 from .models import Product
 
 
-def seller_update_resets_moderation(product: Product, *, by_admin: bool = False) -> bool:
+def seller_update_resets_moderation(
+    product: Product,
+    *,
+    by_admin: bool = False,
+) -> bool:
     """Return True when a seller edit of an active product must re-enter moderation."""
     return not by_admin and product.status == Product.STATUS_ACTIVE
 

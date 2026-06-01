@@ -23,6 +23,13 @@ def is_platform_admin(user):
     )
 
 
+def is_admin_editing_other_users_resource(user, owner_id):
+    """True when a platform admin edits someone else's resource (not their own seller content)."""
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    return is_platform_admin(user) and owner_id != user.id
+
+
 def is_seller(user):
     if not user or not getattr(user, "is_authenticated", False):
         return False

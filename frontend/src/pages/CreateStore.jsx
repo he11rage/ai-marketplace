@@ -68,8 +68,12 @@ export default function CreateStore() {
                 await apiEndpoints.createStore(submitData);
             }
 
-            await queryClient.invalidateQueries(['stores']);
-            await queryClient.invalidateQueries(['user']);
+            await queryClient.invalidateQueries({ queryKey: ['stores'] });
+            await queryClient.invalidateQueries({ queryKey: ['user'] });
+            if (isEditMode) {
+                await queryClient.invalidateQueries({ queryKey: ['store', id] });
+            }
+            await queryClient.invalidateQueries({ queryKey: ['seller', 'analytics', 'quality'] });
 
             navigate('/account');
         } catch (error) {

@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiEndpoints } from '../../api/axios';
 import Badge from '../../components/ui/Badge';
+import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 
 const STORE_STATUS_MAP = {
@@ -106,7 +107,15 @@ export function SellerQualityTab({ storeFilter }) {
 
               {store.moderation_reason && (
                 <div className="mb-4 p-3 rounded-xl bg-[#FF3B30]/10 text-sm text-[#FF3B30]">
-                  Модерация: {store.moderation_reason}
+                  <p>Модерация: {store.moderation_reason}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 border-[#FF3B30]/30 text-[#FF3B30] hover:bg-[#FF3B30]/10 hover:border-[#FF3B30]/50"
+                    onClick={() => navigate(`/create-store/${store.store_id}`)}
+                  >
+                    Редактировать магазин
+                  </Button>
                 </div>
               )}
 

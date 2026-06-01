@@ -6,7 +6,8 @@ from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from api.orders.models import Order
-from api.users.roles import is_platform_admin, is_seller
+from api.users.roles import is_admin_editing_other_users_resource, is_platform_admin, is_seller
+from .moderation import seller_store_update_moderation_fields
 from .models import Store
 from .permissions import IsStoreOwnerOrAdminOrReadOnly
 from .serializers import StoreSerializer
@@ -33,7 +34,21 @@ class StoreViewSet(viewsets.ModelViewSet):
         if not is_seller(self.request.user):
             raise PermissionDenied("Создавать магазины могут только продавцы.")
         serializer.save(owner=self.request.user)
-    
+
+    def perform_update(self, serializer):
+        store = self.get_object()
+        moderation_fields = seller_store_update_moderation_fields(
+            store,
+            by_admin=is_admin_editing_other_users_resource(
+                self.request.user, store.owner_id
+            ),
+        )
+        instance = serializer.save(**moderation_fields)
+        if moderation_fields:
+            for attr, value in moderation_fields.items():
+                setattr(instance, attr, value)
+            instance.save(update_fields=[*moderation_fields.keys(), "updated_at"])
+
     def get_queryset(self):
         sales_filter = Q(
             products__order_items__order__status__in=Order.SALES_COUNT_STATUSES

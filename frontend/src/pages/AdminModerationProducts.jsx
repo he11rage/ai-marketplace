@@ -2,6 +2,10 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Button from '../components/ui/Button';
+import ModerationPreviewModal from '../components/ModerationPreviewModal';
+import CategoryApprovalRequiredModal from '../components/CategoryApprovalRequiredModal';
+import ModerationActionModal from '../components/ModerationActionModal';
+import { PRODUCT_STATUS_ACTIONS } from '../constants/moderationActions';
 import { apiEndpoints } from '../api/axios';
 
 function StatusPill({ status }) {
@@ -24,6 +28,10 @@ export default function AdminModerationProducts() {
   const qc = useQueryClient();
   const [status, setStatus] = useState('pending_moderation');
   const [q, setQ] = useState('');
+  const [previewProduct, setPreviewProduct] = useState(null);
+  const [categoryBlockProduct, setCategoryBlockProduct] = useState(null);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [actionSubmitting, setActionSubmitting] = useState(false);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['moderation', 'products', { status, q }],
@@ -35,13 +43,34 @@ export default function AdminModerationProducts() {
 
   const items = useMemo(() => (Array.isArray(data) ? data : (data?.results ?? [])), [data]);
 
-  const setProductStatus = async (id, next) => {
-    const needsReason = ['draft', 'rejected', 'blocked'].includes(next);
-    const reason = needsReason
-      ? (window.prompt('Причина модерации (необязательно):', '') ?? '')
-      : '';
+  const setProductStatus = async (id, next, reason = '') => {
     await apiEndpoints.moderationSetProductStatus(id, { status: next, reason });
     await qc.invalidateQueries({ queryKey: ['moderation', 'products'] });
+  };
+
+  const openProductAction = (product, next) => {
+    const config = PRODUCT_STATUS_ACTIONS[next];
+    if (!config) return;
+    setPendingAction({ product, next, ...config });
+  };
+
+  const handleConfirmProductAction = async (reason) => {
+    if (!pendingAction) return;
+    setActionSubmitting(true);
+    try {
+      await setProductStatus(pendingAction.product.id, pendingAction.next, reason);
+      setPendingAction(null);
+    } finally {
+      setActionSubmitting(false);
+    }
+  };
+
+  const handleApprove = (product) => {
+    if (product.category_needs_verification) {
+      setCategoryBlockProduct(product);
+      return;
+    }
+    setProductStatus(product.id, 'active');
   };
 
   return (
@@ -82,7 +111,14 @@ export default function AdminModerationProducts() {
             <div key={p.id} className="p-5 flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <div className="font-semibold truncate">{p.name}</div>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewProduct(p)}
+                    className="font-semibold truncate text-left text-[#007AFF] hover:underline max-w-full"
+                    title="Показать описание и фото"
+                  >
+                    {p.name}
+                  </button>
                   <StatusPill status={p.status} />
                 </div>
                 <div className="mt-2 text-xs text-text-secondary flex items-center gap-2 flex-wrap">
@@ -110,16 +146,16 @@ export default function AdminModerationProducts() {
                 )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <Button variant="secondary" onClick={() => setProductStatus(p.id, 'active')}>
+                <Button variant="secondary" onClick={() => handleApprove(p)}>
                   Принять
                 </Button>
-                <Button variant="secondary" onClick={() => setProductStatus(p.id, 'draft')}>
+                <Button variant="secondary" onClick={() => openProductAction(p, 'draft')}>
                   На доработку
                 </Button>
-                <Button variant="secondary" onClick={() => setProductStatus(p.id, 'rejected')}>
+                <Button variant="secondary" onClick={() => openProductAction(p, 'rejected')}>
                   Отклонить
                 </Button>
-                <Button variant="secondary" onClick={() => setProductStatus(p.id, 'blocked')}>
+                <Button variant="secondary" onClick={() => openProductAction(p, 'blocked')}>
                   Блок
                 </Button>
               </div>
@@ -127,6 +163,54 @@ export default function AdminModerationProducts() {
           ))}
         </div>
       )}
+
+      <CategoryApprovalRequiredModal
+        open={Boolean(categoryBlockProduct)}
+        onClose={() => setCategoryBlockProduct(null)}
+        categoryName={categoryBlockProduct?.category_name}
+      />
+
+      <ModerationActionModal
+        open={Boolean(pendingAction)}
+        onClose={() => !actionSubmitting && setPendingAction(null)}
+        title={pendingAction?.title}
+        description={pendingAction?.description}
+        entityName={pendingAction?.product?.name}
+        entityLabel="Товар"
+        confirmLabel={pendingAction?.confirmLabel}
+        confirmVariant={pendingAction?.confirmVariant}
+        onConfirm={handleConfirmProductAction}
+        isSubmitting={actionSubmitting}
+      />
+
+      <ModerationPreviewModal
+        open={Boolean(previewProduct)}
+        onClose={() => setPreviewProduct(null)}
+        title={previewProduct?.name}
+        description={previewProduct?.description}
+        imageUrl={previewProduct?.image}
+        imageAlt={previewProduct?.name}
+      >
+        {previewProduct && (
+          <div className="text-xs text-text-secondary flex flex-wrap gap-x-2 gap-y-1">
+            <span>id: {previewProduct.id}</span>
+            <span className="text-[#E5E5EA]">•</span>
+            <span>магазин: {previewProduct.store_name} (#{previewProduct.store_id})</span>
+            {previewProduct.category_name && (
+              <>
+                <span className="text-[#E5E5EA]">•</span>
+                <span>категория: {previewProduct.category_name}</span>
+              </>
+            )}
+            {previewProduct.price != null && (
+              <>
+                <span className="text-[#E5E5EA]">•</span>
+                <span>цена: {Number(previewProduct.price).toLocaleString('ru-RU')} ₽</span>
+              </>
+            )}
+          </div>
+        )}
+      </ModerationPreviewModal>
     </div>
   );
 }
