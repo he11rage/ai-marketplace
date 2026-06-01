@@ -85,6 +85,12 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
 ]
 
+CORS_EXPOSE_HEADERS = [
+    "Content-Disposition",
+    "X-Export-Count",
+    "X-Export-Truncated",
+]
+
 ROOT_URLCONF = 'core.urls'
 
 TEMPLATES = [

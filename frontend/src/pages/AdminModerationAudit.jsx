@@ -1,8 +1,19 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import Button from '../components/ui/Button';
 import { apiEndpoints } from '../api/axios';
+import {
+  downloadBlob,
+  formatAuditExportFilename,
+  parseContentDispositionFilename,
+} from '../utils/downloadBlob';
 
 export default function AdminModerationAudit() {
+  const [days, setDays] = useState(30);
+  const [exporting, setExporting] = useState(false);
+  const [exportResult, setExportResult] = useState(null);
+  const [exportError, setExportError] = useState('');
+
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['moderation', 'audit'],
     queryFn: async () => {
@@ -13,12 +24,86 @@ export default function AdminModerationAudit() {
 
   const items = useMemo(() => (Array.isArray(data) ? data : (data?.results ?? [])), [data]);
 
+  const runExport = async () => {
+    setExporting(true);
+    setExportError('');
+    setExportResult(null);
+    try {
+      const res = await apiEndpoints.moderationExportAudit({ days: Number(days) });
+      const disposition = res.headers['content-disposition'];
+      const filename =
+        parseContentDispositionFilename(disposition) || formatAuditExportFilename();
+      downloadBlob(
+        new Blob([res.data], { type: 'text/plain;charset=utf-8' }),
+        filename,
+      );
+      const count = res.headers['x-export-count'];
+      const truncated = res.headers['x-export-truncated'] === '1';
+      setExportResult({
+        filename,
+        count: count != null ? Number(count) : null,
+        truncated,
+      });
+    } catch (e) {
+      if (e?.response?.data instanceof Blob) {
+        try {
+          const text = await e.response.data.text();
+          const parsed = JSON.parse(text);
+          setExportError(parsed.detail || 'Не удалось выгрузить аудит');
+          return;
+        } catch {
+          /* fall through */
+        }
+      }
+      setExportError(e?.response?.data?.detail || 'Не удалось выгрузить аудит');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="bg-white rounded-2xl shadow-subtle border border-[#E5E5EA] overflow-hidden">
       <div className="p-5 border-b border-[#F2F2F7] flex flex-wrap items-center justify-between gap-3">
-        <div className="font-bold text-lg">Аудит действий</div>
-        <div className="text-sm text-text-secondary">Последние действия модераторов (кто/что/когда/IP/UA).</div>
+        <div>
+          <div className="font-bold text-lg">Аудит действий</div>
+          <div className="text-sm text-text-secondary mt-1">
+            Последние действия модераторов (кто/что/когда/IP/UA).
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-sm text-text-secondary flex items-center gap-2">
+            За
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={days}
+              onChange={(e) => setDays(e.target.value)}
+              className="w-20 bg-[#F2F2F7] rounded-xl px-3 py-2 text-sm outline-none text-text-primary"
+            />
+            дн.
+          </label>
+          <Button type="button" variant="secondary" disabled={exporting} onClick={runExport}>
+            {exporting ? 'Выгрузка…' : 'Скачать журнал'}
+          </Button>
+        </div>
       </div>
+
+      {exportError ? (
+        <div className="px-5 py-3 text-sm text-[#FF3B30] border-b border-[#F2F2F7]">{exportError}</div>
+      ) : null}
+      {exportResult ? (
+        <div className="px-5 py-3 text-sm text-[#34C759] border-b border-[#F2F2F7]">
+          Файл сохранён в загрузки: <span className="font-medium">{exportResult.filename}</span>
+          {exportResult.count != null ? (
+            <>
+              {' '}
+              ({exportResult.count} записей
+              {exportResult.truncated ? ', достигнут лимит выборки' : ''})
+            </>
+          ) : null}
+        </div>
+      ) : null}
 
       {isLoading ? (
         <div className="p-6 text-text-secondary">Загрузка…</div>
@@ -77,4 +162,3 @@ export default function AdminModerationAudit() {
     </div>
   );
 }
-

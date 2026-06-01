@@ -1,26 +1,9 @@
-import { useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { apiEndpoints } from '../../api/axios';
 import { useWishlist } from '../../hooks/useWishlist';
-import Button from './Button';
-
-const REPORT_REASONS = [
-    'Спам/мошенничество',
-    'Оскорбления/ненависть',
-    'Нецензурная лексика',
-    'Ложная информация',
-    'Другое',
-];
 
 export default function ProductCard({ product, isOwner = false }) {
     const navigate = useNavigate();
     const { toggle, isInWishlist } = useWishlist();
-    const [isReportOpen, setIsReportOpen] = useState(false);
-    const [reportReason, setReportReason] = useState(REPORT_REASONS[0]);
-    const [reportDescription, setReportDescription] = useState('');
-    const [reportError, setReportError] = useState('');
-    const [reportSuccess, setReportSuccess] = useState('');
     const liked = isInWishlist(product.id);
     const discount = product.old_price ? Math.round(((product.old_price - product.price) / product.old_price) * 100) : 0;
     const categoryName = product.category_name || product.category?.name || '';
@@ -44,35 +27,6 @@ export default function ProductCard({ product, isOwner = false }) {
     const handleLikeClick = (e) => {
         e.stopPropagation();
         toggle(product);
-    };
-
-    const closeReportModal = () => {
-        setIsReportOpen(false);
-        setReportError('');
-        setReportSuccess('');
-    };
-
-    const handleReportClick = (e) => {
-        e.stopPropagation();
-        setIsReportOpen(true);
-    };
-
-    const handleSubmitReport = async () => {
-        setReportError('');
-        setReportSuccess('');
-        try {
-            await apiEndpoints.createReport({
-                target_type: 'product',
-                product: Number(product.id),
-                reason: reportReason,
-                description: reportDescription,
-            });
-            setReportSuccess('Жалоба отправлена.');
-            setReportDescription('');
-        } catch (e) {
-            const msg = e?.response?.data?.detail || 'Не удалось отправить жалобу.';
-            setReportError(msg);
-        }
     };
 
     return (
@@ -164,83 +118,7 @@ export default function ProductCard({ product, isOwner = false }) {
                         </>
                     )}
                 </div>
-
-                {!isOwner && (
-                    <button
-                        type="button"
-                        onClick={handleReportClick}
-                        className="mt-2 text-xs text-[#FF3B30] hover:underline opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Пожаловаться на товар"
-                    >
-                        Пожаловаться
-                    </button>
-                )}
             </div>
-
-            {isReportOpen && createPortal(
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-                    <button
-                        type="button"
-                        className="absolute inset-0 bg-black/30"
-                        onClick={closeReportModal}
-                        aria-label="Закрыть"
-                    />
-                    <div
-                        className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-[#F2F2F7]">
-                            <div className="text-lg font-bold">Жалоба на товар</div>
-                            <button
-                                type="button"
-                                onClick={closeReportModal}
-                                className="w-10 h-10 rounded-full bg-[#F2F2F7] hover:bg-[#E5E5EA] transition flex items-center justify-center text-text-secondary"
-                                aria-label="Закрыть"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            {reportError && <div className="text-sm text-[#FF3B30]">{reportError}</div>}
-                            {reportSuccess && <div className="text-sm text-[#34C759]">{reportSuccess}</div>}
-
-                            <label className="block">
-                                <div className="text-sm font-medium text-text-secondary mb-2">Причина</div>
-                                <select
-                                    value={reportReason}
-                                    onChange={(e) => setReportReason(e.target.value)}
-                                    className="w-full bg-[#F2F2F7] rounded-xl px-4 py-3 outline-none"
-                                >
-                                    {REPORT_REASONS.map((opt) => (
-                                        <option key={opt} value={opt}>{opt}</option>
-                                    ))}
-                                </select>
-                            </label>
-
-                            <label className="block">
-                                <div className="text-sm font-medium text-text-secondary mb-2">Комментарий</div>
-                                <textarea
-                                    value={reportDescription}
-                                    onChange={(e) => setReportDescription(e.target.value)}
-                                    rows={4}
-                                    className="w-full bg-[#F2F2F7] rounded-xl px-4 py-3 outline-none resize-none"
-                                    placeholder="Опишите, что именно не так"
-                                />
-                            </label>
-
-                            <div className="flex justify-end gap-3">
-                                <Button variant="secondary" onClick={closeReportModal}>
-                                    Отмена
-                                </Button>
-                                <Button onClick={handleSubmitReport}>Отправить</Button>
-                            </div>
-                        </div>
-                    </div>
-                </div>,
-                document.body
-            )}
         </div>
     );
 }

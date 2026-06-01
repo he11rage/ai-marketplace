@@ -1,0 +1,117 @@
+{
+  "exported_at": "2026-06-01T08:03:04.237574+00:00",
+  "period_days": 10,
+  "since": "2026-05-22T08:03:04.233524+00:00",
+  "count": 6,
+  "truncated": false,
+  "entries": [
+    {
+      "id": 6,
+      "actor": 1,
+      "actor_username": "admin",
+      "action": "store.set_status",
+      "object_type": "store",
+      "object_id": "63",
+      "payload": {
+        "to": "active",
+        "from": "pending_moderation",
+        "reason": ""
+      },
+      "ip_address": "172.19.0.1",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "request_method": "POST",
+      "request_path": "/api/moderation/stores/63/set_status/",
+      "created_at": "2026-05-30T07:53:18.536865Z"
+    },
+    {
+      "id": 5,
+      "actor": 1,
+      "actor_username": "admin",
+      "action": "product.set_status",
+      "object_type": "product",
+      "object_id": "303",
+      "payload": {
+        "to": "draft",
+        "from": "pending_moderation",
+        "reason": "не новый товар"
+      },
+      "ip_address": "172.19.0.1",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "request_method": "POST",
+      "request_path": "/api/moderation/products/303/set_status/",
+      "created_at": "2026-05-30T07:49:03.013339Z"
+    },
+    {
+      "id": 4,
+      "actor": 1,
+      "actor_username": "admin",
+      "action": "store.set_status",
+      "object_type": "store",
+      "object_id": "62",
+      "payload": {
+        "to": "active",
+        "from": "pending_moderation",
+        "reason": ""
+      },
+      "ip_address": "172.19.0.1",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "request_method": "POST",
+      "request_path": "/api/moderation/stores/62/set_status/",
+      "created_at": "2026-05-30T07:37:11.442241Z"
+    },
+    {
+      "id": 3,
+      "actor": 1,
+      "actor_username": "admin",
+      "action": "product.set_status",
+      "object_type": "product",
+      "object_id": "302",
+      "payload": {
+        "to": "active",
+        "from": "pending_moderation",
+        "reason": ""
+      },
+      "ip_address": "172.19.0.1",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "request_method": "POST",
+      "request_path": "/api/moderation/products/302/set_status/",
+      "created_at": "2026-05-30T07:36:58.581724Z"
+    },
+    {
+      "id": 2,
+      "actor": 1,
+      "actor_username": "admin",
+      "action": "product.set_status",
+      "object_type": "product",
+      "object_id": "250",
+      "payload": {
+        "to": "active",
+        "from": "pending_moderation",
+        "reason": ""
+      },
+      "ip_address": null,
+      "user_agent": "",
+      "request_method": "",
+      "request_path": "",
+      "created_at": "2026-05-28T11:39:34.209396Z"
+    },
+    {
+      "id": 1,
+      "actor": 1,
+      "actor_username": "admin",
+      "action": "product.set_status",
+      "object_type": "product",
+      "object_id": "251",
+      "payload": {
+        "to": "draft",
+        "from": "pending_moderation",
+        "reason": ""
+      },
+      "ip_address": null,
+      "user_agent": "",
+      "request_method": "",
+      "request_path": "",
+      "created_at": "2026-05-28T11:39:32.399934Z"
+    }
+  ]
+}

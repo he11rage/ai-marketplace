@@ -167,6 +167,8 @@ export const apiEndpoints = {
     moderationSetOrderStatus: (id, data) => api.post(`/api/moderation/orders/${id}/set_status/`, data),
 
     moderationListAudit: (params = {}) => api.get('/api/moderation/audit/', { params }),
+    moderationExportAudit: (data = {}, config = {}) =>
+        api.post('/api/moderation/audit/export/', data, { responseType: 'blob', ...config }),
     moderationListAIHistory: (params = {}) => api.get('/api/moderation/ai-history/', { params }),
 
     // Seller cabinet

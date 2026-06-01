@@ -1,9 +1,14 @@
 from django.db.models import Count
 from django.db.models import Prefetch
 from django.utils import timezone
+from urllib.parse import quote
+
+from django.http import HttpResponse
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+
+from .audit_export import DEFAULT_EXPORT_DAYS, build_audit_export
 
 from api.ai_chat.models import AIChatHistory
 from api.categories.models import Category
@@ -314,4 +319,40 @@ class AdminActionLogViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AdminActionLogSerializer
     permission_classes = [IsModerator]
     queryset = AdminActionLog.objects.select_related("actor").all().order_by("-created_at")
+
+    @action(detail=False, methods=["post"], url_path="export")
+    def export_logs(self, request):
+        raw_days = (request.data or {}).get("days", request.query_params.get("days"))
+        try:
+            days = int(raw_days) if raw_days is not None else DEFAULT_EXPORT_DAYS
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "Параметр days должен быть целым числом."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            content, filename, meta = build_audit_export(days=days)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        _log(
+            request,
+            "audit.export",
+            "audit_export",
+            meta["filename"],
+            {
+                "days": days,
+                "count": meta["count"],
+                "filename": meta["filename"],
+                "truncated": meta["truncated"],
+            },
+        )
+        response = HttpResponse(content, content_type="text/plain; charset=utf-8")
+        response["Content-Disposition"] = (
+            f"attachment; filename=\"audit_export.txt\"; "
+            f"filename*=UTF-8''{quote(filename)}"
+        )
+        response["X-Export-Count"] = str(meta["count"])
+        response["X-Export-Truncated"] = "1" if meta["truncated"] else "0"
+        return response
 

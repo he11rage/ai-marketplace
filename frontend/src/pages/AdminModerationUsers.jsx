@@ -26,7 +26,7 @@ export default function AdminModerationUsers() {
     <div className="bg-white rounded-2xl shadow-subtle border border-[#E5E5EA] overflow-hidden">
       <div className="p-5 border-b border-[#F2F2F7] flex flex-wrap items-center justify-between gap-3">
         <div className="font-bold text-lg">Пользователи</div>
-        <div className="text-sm text-text-secondary">Роли: покупатель, продавец, админ. Также `is_active` и `is_staff`.</div>
+        <div className="text-sm text-text-secondary">Роли: покупатель, продавец, админ. Также активный и сотрудник.</div>
       </div>
 
       {isLoading ? (
@@ -79,7 +79,7 @@ export default function AdminModerationUsers() {
                   Админ
                 </Button>
                 <Button variant="secondary" onClick={() => patchUser(u.id, { is_staff: !u.is_staff })}>
-                  {u.is_staff ? 'Снять staff' : 'Сделать staff'}
+                  {u.is_staff ? 'Снять сотрудника' : 'Сделать сотрудником'}
                 </Button>
               </div>
             </div>
