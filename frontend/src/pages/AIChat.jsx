@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { useWishlist } from '../hooks/useWishlist';
+import { useCart } from '../hooks/useCart';
 import { apiEndpoints } from '../api/axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -9,6 +10,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 export default function AIChat() {
   const navigate = useNavigate();
   const { toggle: toggleWishlist, isInWishlist } = useWishlist();
+  const { addToCart, items: cartItems } = useCart();
   const messagesEndRef = useRef(null);
 
   const [messages, setMessages] = useState([
@@ -138,20 +140,26 @@ export default function AIChat() {
     }
   };
 
-  const handleAddToCart = async (productId, productName) => {
-    try {
-      await apiEndpoints.addToCart({ product: productId, quantity: 1 });
-      alert(`✅ ${productName} добавлен в корзину!`);
-    } catch (error) {
-      console.error('Add to cart error:', error);
-      if (error.response?.status === 401) {
-        navigate('/login');
-      }
+  const handleAddToCart = (item) => {
+    if (!item) return;
+
+    const existingItem = cartItems.find((c) => c.id === item.id);
+
+    if (existingItem) {
+      // Уже в корзине — открываем корзину
+      navigate('/cart');
+      return;
     }
+
+    // Добавляем через хук (он сам дёргает API и обновляет состояние)
+    addToCart({ ...item, quantity: 1 });
   };
 
   const renderProductCard = (item) => {
     const liked = isInWishlist(item.id);
+    const cartItem = cartItems.find((c) => c.id === item.id);
+    const isInCart = !!cartItem;
+    const cartQuantity = cartItem?.quantity || 0;
 
     return (
       <div className="bg-white rounded-xl p-4 shadow-subtle hover:shadow-md transition border border-[#E5E5EA]">
@@ -192,13 +200,32 @@ export default function AIChat() {
             )}
 
             <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                onClick={() => handleAddToCart(item.id, item.name)}
-                className="bg-[#007AFF] hover:bg-[#0056CC]"
+              <button
+                type="button"
+                onClick={() => handleAddToCart(item)}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 ${
+                  isInCart
+                    ? 'bg-[#34C759] text-white hover:bg-[#2DA84A]'
+                    : 'bg-[#007AFF] text-white hover:bg-[#0056CC]'
+                }`}
               >
-                В корзину
-              </Button>
+                {isInCart ? (
+                  <>
+                    <span>В корзине ({cartQuantity})</span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </>
+                ) : (
+                  <>
+                    <span>В корзину</span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                    </svg>
+                  </>
+                )}
+              </button>
+
               <button
                 type="button"
                 onClick={() => toggleWishlist(item)}

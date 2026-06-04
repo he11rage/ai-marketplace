@@ -3,12 +3,16 @@ from django.db.models import Q
 
 from api.products.models import Product
 from api.stores.models import Store
-from .config import SIMILAR_PRODUCTS_MIN_SIMILARITY
+from .config import (
+    SIMILAR_PRODUCTS_MIN_SIMILARITY,
+    CHAT_MIN_VECTOR_SIMILARITY_THRESHOLD,
+    CHAT_MIN_HYBRID_SCORE_THRESHOLD,
+)
 from .hybrid_search import hybrid_search_products
 
 CHAT_SEARCH_LIMIT = 5
-CHAT_MIN_HYBRID_SCORE = 0.25
-CHAT_MIN_VECTOR_SIMILARITY = 0.65
+CHAT_MIN_HYBRID_SCORE = CHAT_MIN_HYBRID_SCORE_THRESHOLD
+CHAT_MIN_VECTOR_SIMILARITY = CHAT_MIN_VECTOR_SIMILARITY_THRESHOLD
 
 
 def search_similar_products(query: str, limit: int = 5, threshold: float = 0.3):
@@ -53,7 +57,6 @@ def search_products_for_chat(
         hybrid = float(getattr(product, "hybrid_score", 0) or 0)
         vector_sim = float(getattr(product, "vector_similarity", 0) or 0)
 
-        # Оставляем, если хотя бы один сигнал сильный
         if hybrid >= CHAT_MIN_HYBRID_SCORE or vector_sim >= min_vector_similarity:
             results.append(
                 {
@@ -64,14 +67,6 @@ def search_products_for_chat(
             )
             if len(results) >= limit:
                 break
-
-    if not results:
-        return []
-
-    # Финальная проверка по топовому результату
-    best = results[0]
-    if best["vector_similarity"] < 0.60 and best["hybrid_score"] < 0.25:
-        return []
 
     return results
 

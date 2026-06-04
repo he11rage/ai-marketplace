@@ -9,11 +9,10 @@ from api.products.models import Product
 from api.stores.models import Store
 from .models import AIChatHistory
 from ml.llm_client import gigachat_client
-from ml.rag_pipeline import search_products_for_chat, CHAT_MIN_VECTOR_SIMILARITY
-
+from ml.rag_pipeline import search_products_for_chat
 
 def _merge_history(db_history: list, client_history: list) -> list:
-    """Клиентская история дополняет БД (для гостей и текущей сессии)."""
+    """Клиентская история дополняет БД."""
     merged = list(db_history or [])
     for entry in client_history or []:
         if not isinstance(entry, dict):
@@ -24,7 +23,6 @@ def _merge_history(db_history: list, client_history: list) -> list:
             merged.append({"user": user, "assistant": assistant})
     return merged[-10:]
 
-
 def _serialize_product(product, request) -> dict:
     image_url = None
     if product.image:
@@ -32,7 +30,6 @@ def _serialize_product(product, request) -> dict:
             image_url = request.build_absolute_uri(product.image.url)
         except Exception:
             image_url = product.image.url
-
     return {
         "id": product.id,
         "name": product.name,
@@ -46,7 +43,6 @@ def _serialize_product(product, request) -> dict:
         "category_name": product.category.name if product.category else None,
     }
 
-
 class AIChatView(APIView):
     permission_classes = [AllowAny]
 
@@ -55,9 +51,7 @@ class AIChatView(APIView):
         request=inline_serializer(
             name="AIChatRequest",
             fields={
-                "message": serializers.CharField(
-                    help_text="User message for the assistant."
-                ),
+                "message": serializers.CharField(help_text="User message for the assistant."),
                 "history": serializers.ListField(
                     child=serializers.DictField(),
                     required=False,
@@ -70,12 +64,7 @@ class AIChatView(APIView):
                 name="AIChatResponse",
                 fields={
                     "message": serializers.CharField(),
-                    "products": serializers.ListField(
-                        child=serializers.DictField(), default=[]
-                    ),
-                    "items": serializers.ListField(
-                        child=serializers.DictField(), default=[]
-                    ),
+                    "products": serializers.ListField(child=serializers.DictField(), default=[]),
                     "type": serializers.CharField(default="text_only"),
                 },
             ),
@@ -86,15 +75,8 @@ class AIChatView(APIView):
             500: inline_serializer(
                 name="AIChatServiceError",
                 fields={
-                    "message": serializers.CharField(
-                        default="Извините, сервис временно недоступен."
-                    ),
-                    "products": serializers.ListField(
-                        child=serializers.DictField(), default=[]
-                    ),
-                    "items": serializers.ListField(
-                        child=serializers.DictField(), default=[]
-                    ),
+                    "message": serializers.CharField(default="Извините, сервис временно недоступен."),
+                    "products": serializers.ListField(child=serializers.DictField(), default=[]),
                     "type": serializers.CharField(default="error"),
                 },
             ),
@@ -108,6 +90,7 @@ class AIChatView(APIView):
         client_history = request.data.get("history") or []
 
         try:
+            # 1. Собираем историю
             db_history = []
             if request.user and request.user.is_authenticated:
                 time_threshold = timezone.now() - timedelta(hours=24)
@@ -121,34 +104,31 @@ class AIChatView(APIView):
                 ]
 
             chat_history = _merge_history(db_history, client_history)
-            intent = gigachat_client.classify_intent(user_message, chat_history)
 
+            # 2. Анализируем намерение и извлекаем поисковый запрос
+            analysis = gigachat_client.analyze_and_route(user_message, chat_history)
+            print(f"🔍 ANALYSIS: {analysis}")
+            intent = analysis.get("intent", "CHAT")
+            search_query = analysis.get("search_query")
+            category_hint = analysis.get("extracted_category")
+            
             response_type = "text_only"
             ai_text = ""
-            items = []
             products_flat = []
 
-            if intent == "off_topic":
+            # 3. Маршрутизация
+            if intent == "OFF_TOPIC":
                 ai_text = gigachat_client.generate_off_topic_response(user_message)
                 response_type = "off_topic"
 
-            elif intent == "chat":
-                ai_text = gigachat_client.generate_chat_response(
-                    user_message, chat_history
-                )
+            elif intent == "CHAT" or not search_query:
+                # Обычный диалог без запроса товара
+                ai_text = gigachat_client.generate_chat_response(user_message, chat_history)
                 response_type = "chat"
 
-            elif gigachat_client.is_ready_for_search(user_message, chat_history):
-                search_query = gigachat_client.build_search_query(
-                    user_message, chat_history
-                )
-
-                # 1. Извлекаем категорию для pre-filtering
-                category_hint = gigachat_client.extract_product_category(
-                    user_message, chat_history
-                )
-
-                # 2. Базовый кверисет
+            elif intent == "SEARCH":
+                # Ищем товары ВСЕГДА, если intent=SEARCH и есть search_query
+                # Базовый кверисет
                 base_qs = Product.objects.filter(
                     status=Product.STATUS_ACTIVE,
                     stock_quantity__gt=0,
@@ -156,58 +136,61 @@ class AIChatView(APIView):
                     embedding__isnull=False,
                 ).select_related("store", "category")
 
-                # 3. Фильтр по категории ДО векторного поиска
-                if category_hint:
-                    base_qs = base_qs.filter(category__name__icontains=category_hint)
+                # 2. Мягкие фильтры по цене и параметрам (они не ломают выдачу, а чистят её)
+                import re
+                user_msg_lower = user_message.lower()
+                
+                # Фильтр цены
+                price_match = re.search(r'(?:до|меньше|дешевле)\s*(\d+)', user_msg_lower)
+                if price_match:
+                    base_qs = base_qs.filter(price__lte=int(price_match.group(1)))
+                
+                # Фильтр диагонали телевизора
+                diagonal_match = re.search(r'(\d+)\s*(?:дюйм|")', user_msg_lower)
+                if diagonal_match:
+                    base_qs = base_qs.filter(name__icontains=diagonal_match.group(1))
 
-                # 4. Поиск по отфильтрованной выборке
+                # 3. УМНЫЙ ФИЛЬТР КАТЕГОРИИ (Проверяем, есть ли товары)
+                if category_hint:
+                    # Пробуем отфильтровать по категории
+                    category_qs = base_qs.filter(category__name__icontains=category_hint)
+                    
+                    # Если с такой категорией хоть что-то нашлось — используем этот кверисет!
+                    if category_qs.exists():
+                        base_qs = category_qs
+                    else:
+                        # Если товаров 0, значит LLM извлекла плохой hint (например "подарок").
+                        # Мы НЕ фильтруем жестко, чтобы не было нуля, а просто добавляем 
+                        # ключевое слово в текстовый поиск, чтобы вектор вытащил что нужно.
+                        search_query = f"{category_hint} {search_query}"
+
+                # Оптимизируем запросы
+                base_qs = base_qs.select_related("store", "category")
+
+                # Поиск (ищем до 5 товаров, или сколько найдётся)
                 search_results = search_products_for_chat(
                     search_query,
                     base_queryset=base_qs,
-                    min_vector_similarity=CHAT_MIN_VECTOR_SIMILARITY,
+                    min_vector_similarity=0.3,  # Мягкий порог
                 )
 
                 if not search_results:
                     ai_text = gigachat_client.generate_no_results_message(search_query)
                     response_type = "no_results"
                 else:
-                    intro = f"Нашёл {len(search_results)} {_plural_products(len(search_results))} по запросу. Вот что могу порекомендовать:"
-                    ai_text = intro
+                    # Формируем ответ
+                    count = len(search_results)
+                    ai_text = f"Нашёл {count} {_plural_products(count)} по вашему запросу. Вот что могу порекомендовать:"
                     response_type = "search"
 
                     for row in search_results:
                         product_data = _serialize_product(row["product"], request)
-                        comment = gigachat_client.generate_product_comment(
-                            product_data,
-                            search_query,
-                            user_message,
-                        )
-                        # Отсекаем LLM-галлюцинации по несоответствию категорий
-                        if comment.upper() == "SKIP":
-                            continue
-
-                        item = {"product": product_data, "comment": comment}
-                        items.append(item)
                         products_flat.append(product_data)
 
-                    # Если всё отсеялось валидатором
-                    if not items:
-                        ai_text = gigachat_client.generate_no_results_message(
-                            search_query
-                        )
-                        response_type = "no_results"
-                        products_flat = []
-
-            else:
-                ai_text = gigachat_client.generate_consultant_response(
-                    user_message, chat_history
-                )
-                response_type = "clarify"
-
+            # 4. Сохранение в историю
             history_response_type = {
                 "search": "search",
                 "no_results": "fallback",
-                "clarify": "fallback",
                 "chat": "fallback",
                 "off_topic": "fallback",
             }.get(response_type, "search")
@@ -225,7 +208,6 @@ class AIChatView(APIView):
                 {
                     "message": ai_text,
                     "products": products_flat,
-                    "items": items,
                     "type": response_type,
                 }
             )
@@ -236,12 +218,10 @@ class AIChatView(APIView):
                 {
                     "message": "Извините, сервис временно недоступен.",
                     "products": [],
-                    "items": [],
                     "type": "error",
                 },
                 status=500,
             )
-
 
 def _plural_products(n: int) -> str:
     if 11 <= n % 100 <= 14:

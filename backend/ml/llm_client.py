@@ -1,22 +1,10 @@
 import os
-import re
+import json
 from gigachat import GigaChat
 
-CONSULTANT_BASE_PROMPT = """Ты — профессиональный ИИ-консультант маркетплейса MarketFlow.
-Твоя главная задача — НЕ запускать поиск сразу, а сначала собрать детали.
-ЖЁСТКИЕ ПРАВИЛА:
-1. ЗАПРЕЩЕНО предлагать товары или запускать поиск, пока не собрано МИНИМУМ 3 параметра:
-   - Тип/категория товара (например, ноутбук, кроссовки, монитор)
-   - Ключевая характеристика или бренд (например, игровой, Apple, кожаные, 4K)
-   - Бюджет или ценовой диапазон (например, до 50000, эконом-класс)
-2. Пока параметров меньше трёх — задавай СТРОГО ОДИН уточняющий вопрос за раз.
-3. Веди диалог естественно: "Понял, ищем ноутбук. А для каких задач вам нужен — учёба, игры или работа?"
-4. Если пользователь отвечает уклончиво, предложи популярные варианты в этой категории.
-5. Когда собрано достаточно данных, сделай краткое резюме и спроси: "Ищем такие варианты? Запускаю поиск?"
-6. Только после явного согласия ("да", "ищи", "покажи") или если пользователь сам дал все 3 параметра — разрешается переход к поиску.
-7. На приветствия/small talk отвечай дружелюбно. На оффтоп вежливо возвращай к теме покупок.
-8. Отвечай кратко (1-2 предложения). Без markdown, списков и лишних слов."""
-
+CONSULTANT_BASE_PROMPT = """Ты — дружелюбный ИИ-консультант маркетплейса MarketFlow.
+Твоя задача — помочь пользователю найти товары.
+Отвечай кратко (1-2 предложения). Без markdown и списков."""
 
 def _format_history(chat_history: list | None) -> str:
     if not chat_history:
@@ -26,11 +14,6 @@ def _format_history(chat_history: list | None) -> str:
         parts.append(f"User: {msg.get('user', '')}")
         parts.append(f"Assistant: {msg.get('assistant', '')}")
     return "\n".join(parts) + "\n"
-
-
-def _first_token(text: str) -> str:
-    return (text or "").strip().split()[0].upper() if text else ""
-
 
 class GigaChatClient:
     def __init__(self):
@@ -62,129 +45,75 @@ class GigaChatClient:
             print(f"❌ Ошибка GigaChat: {e}")
             return ""
 
-    def classify_intent(
-        self, user_message: str, chat_history: list | None = None
-    ) -> str:
+    def analyze_and_route(self, user_message: str, chat_history: list | None = None) -> dict:
+        """
+        ЕДИНЫЙ вызов LLM для анализа намерения и извлечения поискового запроса.
+        Возвращает: intent (SEARCH/CHAT/OFF_TOPIC) и search_query.
+        """
         history_context = _format_history(chat_history)
-        prompt = f"""Определи намерение последнего сообщения пользователя в диалоге с консультантом маркетплейса.
-Ответь РОВНО одним словом без пояснений:
-- SEARCH — хочет найти/купить товар, уточняет параметры товара, соглашается на поиск («да», «ищи», «покажи» после резюме)
-- CHAT — приветствие, благодарность, общий разговор о магазине без конкретного товара
-- OFF_TOPIC — тема не связана с покупками на маркетплейсе
+        prompt = f"""Ты — интеллектуальный маршрутизатор маркетплейса MarketFlow.
+Проанализируй сообщение и верни СТРОГО валидный JSON без markdown.
+
+Формат JSON:
+{{
+  "intent": "SEARCH" | "CHAT" | "OFF_TOPIC",
+  "search_query": "строка или null",
+  "extracted_category": "строка или null"
+}}
+
+Правила:
+1. intent="SEARCH" если пользователь хочет найти/купить товар, обустроить что-то, собрать набор, подобрать товары для цели/события/активности.
+2. intent="CHAT" если это приветствие, благодарность, общий разговор без конкретного запроса.
+3. intent="OFF_TOPIC" если тема не связана с покупками.
+4. search_query — конкретный поисковый запрос для базы данных (3-15 слов). Для CURATED_SELECTION запрос должен содержать конкретные категории товаров.
+5. extracted_category — основная категория товара если упоминается (например, "мышь", "ноутбук", "кресло"). Если нет, то null.
+
+Примеры:
+- "Хочу беспроводную мышь" → intent="SEARCH", search_query="беспроводная мышь компьютерная", extracted_category="мышь"
+- "Обустрой ванну до 50000" → intent="SEARCH", search_query="ванна обустройство полотенце халат тапочки коврик шторка", extracted_category=null
+- "Собери ребенка в школу" → intent="SEARCH", search_query="школа рюкзак пенал тетради ручки карандаши", extracted_category=null
+- "Подбери товары для похода" → intent="SEARCH", search_query="поход палатка спальник рюкзак фонарь котелок", extracted_category=null
+- "Собери рабочее место программиста" → intent="SEARCH", search_query="рабочее место монитор клавиатура мышь кресло стол лампа", extracted_category=null
+- "Привет" → intent="CHAT", search_query=null, extracted_category=null
+- "Какая погода?" → intent="OFF_TOPIC", search_query=null, extracted_category=null
 
 История:
 {history_context}
 Сообщение: "{user_message}"
-Ответ:"""
-        raw = self._chat(prompt)
-        token = _first_token(raw)
-        if token in ("SEARCH", "ПОИСК"):
-            return "search"
-        if token in ("OFF_TOPIC", "OFFTOPIC", "OFF-TOPIC"):
-            return "off_topic"
-        if token == "CHAT":
-            return "chat"
-        return "chat"
+JSON:"""
+        
+        raw_response = self._chat(prompt)
+        
+        # Очистка от markdown
+        raw_response = raw_response.strip()
+        if raw_response.startswith("```json"):
+            raw_response = raw_response[7:]
+        if raw_response.startswith("```"):
+            raw_response = raw_response[3:]
+        if raw_response.endswith("```"):
+            raw_response = raw_response[:-3]
+        raw_response = raw_response.strip()
 
-    def is_ready_for_search(
-        self, user_message: str, chat_history: list | None = None
-    ) -> bool:
-        history_context = _format_history(chat_history)
-        confirm_words = (
-            "да",
-            "давай",
-            "ищи",
-            "запускай",
-            "покажи",
-            "найди",
-            "ок",
-            "окей",
-            "ага",
-            "конечно",
-        )
-        if user_message.strip().lower() in confirm_words or any(
-            user_message.strip().lower().startswith(w) for w in confirm_words
-        ):
-            if chat_history:
-                return True
+        try:
+            result = json.loads(raw_response)
+            return {
+                "intent": result.get("intent", "CHAT").upper(),
+                "search_query": result.get("search_query"),
+                "extracted_category": result.get("extracted_category")
+            }
+        except json.JSONDecodeError:
+            print(f"⚠️ Ошибка парсинга JSON от LLM. Raw: {raw_response}")
+            return {
+                "intent": "CHAT",
+                "search_query": None,
+                "extracted_category": None
+            }
 
-        prompt = f"""{CONSULTANT_BASE_PROMPT}
-
-Проверь историю диалога по чек-листу. Ответь YES или NO.
-ЧЕК-ЛИСТ ДОПУСКА К ПОИСКУ:
-1. Ясно указан тип/категория товара? (YES/NO)
-2. Есть хотя бы одна ключевая характеристика, бренд или назначение? (YES/NO)
-3. Указан бюджет или ценовой диапазон? (YES/NO)
-4. Пользователь явно согласился на поиск ("да", "ищи", "покажи") ИЛИ самостоятельно назвал все 3 параметра? (YES/NO)
-
-Правило: Верни YES ТОЛЬКО если выполнены пункты 1, 2 И (3 ИЛИ 4).
-В остальных случаях верни NO.
-
-История:
-{history_context}
-Текущее сообщение: "{user_message}"
-Ответ (YES или NO):"""
-        raw = self._chat(prompt)
-        return _first_token(raw) == "YES"
-
-    def build_search_query(
-        self, user_message: str, chat_history: list | None = None
-    ) -> str:
-        history_context = _format_history(chat_history)
-        prompt = f"""Сформируй короткий поисковый запрос для каталога товаров (8-20 слов, русский язык).
-Учти всю историю диалога и последнее сообщение. Только текст запроса, без кавычек и пояснений.
-
-История:
-{history_context}
-Последнее сообщение: "{user_message}"
-Поисковый запрос:"""
-        query = self._chat(prompt)
-        query = re.sub(r'^["\']|["\']$', "", (query or "").strip())
-        if not query:
-            query = user_message
-        return query[:500]
-
-    def extract_product_category(
-        self, user_message: str, chat_history: list | None = None
-    ) -> str | None:
-        """Извлекает предполагаемую категорию для pre-filtering."""
-        history_context = _format_history(chat_history)
-        prompt = f"""Выдели ТИП/КАТЕГОРИЮ товара из запроса пользователя одним словом на русском.
-Если тип неясен, это общий вопрос или разговор не о конкретном товаре — верни NONE.
-Примеры: "книга", "ноутбук", "кроссовки", "монитор", "смартфон".
-Не пиши объяснений. Только слово или NONE.
-
-История: {history_context}
-Запрос: "{user_message}"
-Категория:"""
-        raw = self._chat(prompt)
-        cat = (raw or "").strip().lower().strip(".,!?\"'")
-        return None if cat in ("none", "", "н/д") else cat
-
-    def generate_consultant_response(
-        self, user_message: str, chat_history: list | None = None
-    ) -> str:
+    def generate_chat_response(self, user_message: str, chat_history: list | None = None) -> str:
         history_context = _format_history(chat_history)
         prompt = f"""{CONSULTANT_BASE_PROMPT}
-
-История диалога:
-{history_context}
-Текущий запрос пользователя: "{user_message}"
-
-Учитывай контекст из истории при ответе.
-Ответ:"""
-        text = self._chat(prompt)
-        return text or "Извините, произошла техническая ошибка. Попробуйте позже."
-
-    def generate_chat_response(
-        self, user_message: str, chat_history: list | None = None
-    ) -> str:
-        history_context = _format_history(chat_history)
-        prompt = f"""{CONSULTANT_BASE_PROMPT}
-
-Режим: обычный дружелюбный диалог. Поиск товаров не запускай. Не задавай уточнений про товар, если пользователь просто поздоровался.
+Режим: обычный дружелюбный диалог. Поиск товаров не запускай.
 Кратко (1-3 предложения), как консультант MarketFlow.
-
 История:
 {history_context}
 Сообщение: "{user_message}"
@@ -194,47 +123,19 @@ class GigaChatClient:
 
     def generate_off_topic_response(self, user_message: str) -> str:
         prompt = f"""{CONSULTANT_BASE_PROMPT}
-
 Пользователь задал вопрос не про покупки товаров: "{user_message}"
-Вежливо (1-2 предложения) предложи обсудить, какие товары его интересуют. Не отвечай по сути сторонней темы.
+Вежливо (1-2 предложения) предложи обсудить, какие товары его интересуют.
 Ответ:"""
         text = self._chat(prompt)
-        return text or (
-            "Давайте лучше обсудим, какие товары вас интересуют — "
-            "я помогу подобрать идеальный вариант на MarketFlow."
-        )
-
-    def generate_product_comment(
-        self, product_data: dict, search_query: str, user_context: str = ""
-    ) -> str:
-        prompt = f"""Ты консультант MarketFlow. Пользователь искал: "{search_query}".
-Товар: «{product_data.get("name")}», категория: «{product_data.get("category_name") or "—"}»,
-цена: {product_data.get("price")}₽, рейтинг: {product_data.get("rating")}.
-
-ПРАВИЛО: Если категория товара явно НЕ совпадает с типом из запроса 
-(искали книгу, а это электроника/одежда/аксессуар) — верни ТОЛЬКО слово: SKIP
-Иначе напиши 1 короткое предложение: почему товар подходит под запрос. Без приветствий.
-Ответ:"""
-        text = self._chat(prompt)
-        return text.strip() if text else "SKIP"
+        return text or "Давайте лучше обсудим, какие товары вас интересуют — я помогу подобрать идеальный вариант на MarketFlow."
 
     def generate_no_results_message(self, search_query: str) -> str:
         prompt = f"""{CONSULTANT_BASE_PROMPT}
-
 По запросу «{search_query}» в каталоге не нашлось подходящих товаров.
-1. Честно скажи, что именно этой категории/модели сейчас нет.
-2. Предложи 1-2 смежные категории, которые есть в наличии.
-3. НЕ выдумывай товары и НЕ пиши «можно посмотреть на другом устройстве».
+Честно скажи, что именно этой категории сейчас нет.
+Предложи 1-2 смежные категории.
 Ответ (2-3 предложения):"""
         text = self._chat(prompt)
-        return text or (
-            "К сожалению, по вашему запросу на платформе пока нет подходящих товаров. "
-            "Попробуйте уточнить бюджет, бренд или тип — и я поищу снова."
-        )
-
+        return text or "К сожалению, по вашему запросу пока нет подходящих товаров. Попробуйте уточнить — и я поищу снова."
 
 gigachat_client = GigaChatClient()
-
-
-def generate_response(user_message: str, chat_history: list | None = None) -> str:
-    return gigachat_client.generate_consultant_response(user_message, chat_history)

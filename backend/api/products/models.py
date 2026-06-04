@@ -75,15 +75,31 @@ class Product(models.Model):
         return self.name
 
     def save(self, *args, **kwargs):
+        # Генерируем эмбеддинг, если его еще нет (для новых товаров)
         if self.embedding is None:
-            text = f"{self.name} {self.description}"
+            category_name = getattr(self.category, 'name', '') if self.category else ""
+            
+            # Формируем богатый контекст: название + бренд + категория + описание + цена
+            text_to_embed = (
+                f"{self.name} "
+                f"{self.brand or ''} "
+                f"{category_name} "
+                f"{self.description or ''} "
+                f"цена {self.price} рублей"
+            )
             print(f"Generating embedding for: {self.name}")
-            self.embedding = get_embedding(text)
+            self.embedding = get_embedding(text_to_embed)
 
+        # Сначала сохраняем основные поля (включая embedding)
         super().save(*args, **kwargs)
 
+        # Обновляем search_vector для полнотекстового поиска
+        # ВАЖНО: используем .update(), чтобы избежать бесконечной рекурсии метода save
+        from ml.search_vector import build_product_search_vector
         vector = build_product_search_vector(self)
         Product.objects.filter(pk=self.pk).update(search_vector=vector)
+        
+        # Синхронизируем значение в текущем объекте
         self.search_vector = vector
 
 

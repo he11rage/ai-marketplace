@@ -116,11 +116,6 @@ export function SellerAnalyticsTab({ storeFilter }) {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-subtle border border-[#E5E5EA] p-5">
-        <h2 className="font-bold text-lg mb-2">Динамика продаж</h2>
-        <SalesChart salesByDay={overview?.sales_by_day} />
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl shadow-subtle border border-[#E5E5EA] overflow-hidden">
           <div className="p-5 border-b border-[#F2F2F7]">
