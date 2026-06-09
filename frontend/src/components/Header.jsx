@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useCart } from '../hooks/useCart';
 import { apiEndpoints } from '../api/axios';
 import { isAdmin, isSeller } from '../utils/roles';
+import { useChatContext } from '../ChatContext.jsx'; // <-- Импорт контекста шторки
+
 
 const SEARCH_DEBOUNCE_MS = 1000;
 
@@ -14,6 +16,10 @@ export default function Header() {
   const token = localStorage.getItem('access_token');
   const searchFromUrl = new URLSearchParams(location.search).get('search') || '';
   const [searchTerm, setSearchTerm] = useState(searchFromUrl);
+  
+  // ЗАБИРАЕМ ФУНКЦИЮ ОТКРЫТИЯ ШТОРКИ ИЗ ГЛОБАЛЬНОГО КОНТЕКСТА
+  const { openChat } = useChatContext();
+
   const { data: user } = useQuery({
     queryKey: ['user'],
     queryFn: () => apiEndpoints.me().then(res => res.data),
@@ -75,9 +81,13 @@ export default function Header() {
               }}
               className="w-full pl-5 pr-12 py-3 rounded-xl bg-[#F2F2F7] border-2 border-transparent focus:bg-white focus:border-[#007AFF] transition text-sm outline-none"
             />
+            
+            {/* КНОПКА-ИСКОРКА: Теперь триггерит открытие боковой шторки */}
             <button
-              onClick={() => navigate('/chat')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-gradient-to-br from-[#007AFF] to-[#5856D6] flex items-center justify-center text-white hover:scale-105 transition shadow-primary"
+              onClick={openChat} // <-- ЗАМЕНИЛИ NAVIGATE НА OPENCHAT
+              type="button"
+              title="Открыть AI Ассистент"
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-gradient-to-br from-[#007AFF] to-[#5856D6] flex items-center justify-center text-white hover:scale-105 active:scale-95 transition shadow-primary cursor-pointer z-10"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/>

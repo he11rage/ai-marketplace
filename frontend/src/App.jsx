@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom';
 import Header from './components/Header';
+import ChatDrawer from './components/ChatDrawer'; // <-- 1. ДОБАВИЛИ ИМПОРТ НАШЕЙ ШТОРКИ
 import Home from './pages/Home';
 import Authorization from './pages/Authorization';
 import Cart from './pages/Cart';
@@ -7,6 +8,7 @@ import ProductDetail from './pages/ProductDetail';
 import Account from './pages/Account';
 import Catalog from './pages/Catalog';
 import CreateProduct from './pages/CreateProduct';
+import CreateProductDetail from './pages/CreateProduct'; // если нужно, но у вас ниже CreateProduct
 import Wishlist from './pages/Wishlist';
 import AIChat from './pages/AIChat';
 import CreateStore from './pages/CreateStore';
@@ -32,6 +34,7 @@ function App() {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
+
       <main className="flex-1">
         <Routes>
           <Route path="/" element={<Home />} />
@@ -44,7 +47,9 @@ function App() {
           <Route path="/create-product" element={<SellerRoute><CreateProduct /></SellerRoute>} />
           <Route path="/create-product/:id" element={<SellerRoute><CreateProduct /></SellerRoute>} />
           <Route path="/wishlist" element={<Wishlist />} />
+
           <Route path="/chat" element={<AIChat />} />
+
           <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
           <Route path="/admin-panel" element={<AdminRoute><AdminPanel /></AdminRoute>} />
           <Route path="/admin/moderation" element={<AdminRoute><AdminModerationLayout /></AdminRoute>}>
@@ -64,6 +69,8 @@ function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
+
+      <ChatDrawer />
     </div>
   );
 }

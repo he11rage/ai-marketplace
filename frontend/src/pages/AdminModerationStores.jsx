@@ -133,9 +133,6 @@ export default function AdminModerationStores() {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                <Button variant="secondary" onClick={() => patchStore(s.id, { is_verified: !s.is_verified })}>
-                  {s.is_verified ? 'Снять verified' : 'Поставить verified'}
-                </Button>
                 <Button variant="secondary" onClick={() => setStoreStatus(s.id, 'active')}>
                   Активировать
                 </Button>
