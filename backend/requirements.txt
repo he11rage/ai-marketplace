@@ -15,3 +15,4 @@ pytils==0.4.4
 requests==2.32.4
 gigaChain
 gigachat
+yookassa>=3.0.0

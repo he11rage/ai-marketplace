@@ -58,7 +58,7 @@ export default function Account() {
     const handleLogout = () => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
-        localStorage.removeItem('cart'); 
+        localStorage.removeItem('cart');
         navigate('/');
         window.location.reload();
     };
@@ -366,12 +366,18 @@ function OrdersContent() {
 
     const payOrderMutation = useMutation({
         mutationFn: (orderId) => apiEndpoints.payOrder(orderId).then((res) => res.data),
-        onSuccess: (updatedOrder) => {
+        onSuccess: (data) => {
             setActionError('');
-            syncOrderInState(updatedOrder);
+            // Если бэкенд вернул ссылку на оплату, делаем редирект
+            if (data.confirmation_url) {
+                window.location.href = data.confirmation_url;
+            } else {
+                // Fallback на случай, если оплата прошла мгновенно (например, для simulate-payment)
+                syncOrderInState(data);
+            }
         },
         onError: (error) => {
-            setActionError(parseApiError(error, 'Не удалось оплатить заказ.'));
+            setActionError(parseApiError(error, 'Не удалось создать платеж.'));
         },
     });
 

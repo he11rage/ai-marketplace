@@ -52,7 +52,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'rest_framework.authtoken',
     'pgvector',
-    
+
     'api.users',
     'api.stores',
     'api.products',
@@ -199,3 +199,6 @@ DJOSER = {
     },
 }
 
+# YooKassa Settings
+YOOKASSA_SHOP_ID = os.getenv('YOOKASSA_SHOP_ID')
+YOOKASSA_SECRET_KEY = os.getenv('YOOKASSA_SECRET_KEY')

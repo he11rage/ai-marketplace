@@ -10,6 +10,9 @@ from .models import Order, OrderItem
 from .serializers import OrderSerializer
 from api.cart.models import Cart
 from api.products.models import Product
+from rest_framework.views import APIView
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 
 @extend_schema_view(
     list=extend_schema(tags=["orders"]),
@@ -29,6 +32,33 @@ from api.products.models import Product
         responses=OrderSerializer,
     ),
 )
+
+@method_decorator(csrf_exempt, name='dispatch')
+class YooKassaWebhookView(APIView):
+    permission_classes = [permissions.AllowAny]  # Вебхук приходит без JWT токена
+
+    def post(self, request, *args, **kwargs):
+        event = request.data.get('event')
+        payment_id = request.data.get('object', {}).get('id')
+
+        if not payment_id:
+            return Response({'status': 'error'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            order = Order.objects.get(yookassa_payment_id=payment_id)
+        except Order.DoesNotExist:
+            return Response({'status': 'ok'})
+
+        # Если оплата успешна — меняем статус
+        if event == 'payment.succeeded':
+            order.status = Order.STATUS_PAID
+            order.save(update_fields=['status', 'updated_at'])
+        elif event == 'payment.canceled':
+            order.status = Order.STATUS_CANCELLED
+            order.save(update_fields=['status', 'updated_at'])
+
+        return Response({'status': 'ok'})
+
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
@@ -42,14 +72,14 @@ class OrderViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = self.request.user
         cart = Cart.objects.get(user=user)
-        
+
         # Use only selected cart items.
         cart_items = list(
             cart.items.filter(selected=True)
             .select_related('product')
             .order_by('product_id', 'id')
         )
-        
+
         if not cart_items:
             raise serializers.ValidationError("Нет выбранных товаров для заказа")
 
@@ -87,7 +117,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             product = locked_products[cart_item.product_id]
             product.stock_quantity -= cart_item.quantity
             product.save(update_fields=['stock_quantity'])
-            
+
             OrderItem.objects.create(
                 order=order,
                 product=product,
@@ -142,15 +172,28 @@ class OrderViewSet(viewsets.ModelViewSet):
     def pay(self, request, pk=None):
         order = self.get_object()
 
-        if not order.can_transition_to(Order.STATUS_PAID, allow_same=False):
+        if order.status not in [Order.STATUS_CREATED, Order.STATUS_AWAITING_PAYMENT]:
             return Response(
-                {'detail': Order.status_transition_error(order.status, Order.STATUS_PAID)},
+                {'detail': 'Этот заказ нельзя оплатить.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        order.transition_to(Order.STATUS_PAID)
-        order.save(update_fields=['status', 'updated_at'])
-        return Response(self.get_serializer(order).data)
+        # URL, куда ЮKassa вернет пользователя после оплаты (адрес твоего фронтенда)
+        return_url = request.data.get('return_url', 'http://localhost:5173/account')
+
+        try:
+            from .yookassa_service import create_payment
+            payment_id, confirmation_url = create_payment(order, return_url)
+
+            # Сохраняем ID платежа и меняем статус
+            order.yookassa_payment_id = payment_id
+            order.status = Order.STATUS_AWAITING_PAYMENT
+            order.save(update_fields=['yookassa_payment_id', 'status', 'updated_at'])
+
+            # Возвращаем фронтенду ссылку для редиректа
+            return Response({'confirmation_url': confirmation_url})
+        except Exception as e:
+            return Response({'detail': f'Ошибка создания платежа: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['patch'])
     def update_delivery_address(self, request, pk=None):
