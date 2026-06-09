@@ -107,7 +107,7 @@ class AIChatView(APIView):
 
             # 2. Анализируем намерение и извлекаем поисковый запрос
             analysis = gigachat_client.analyze_and_route(user_message, chat_history)
-            print(f"🔍 ANALYSIS: {analysis}")
+            print(f"🔍 ANALYSIS: {analysis}", flush=True)
             intent = analysis.get("intent", "CHAT")
             search_query = analysis.get("search_query")
             category_hint = analysis.get("extracted_category")
@@ -172,6 +172,7 @@ class AIChatView(APIView):
                     search_query,
                     base_queryset=base_qs,
                     min_vector_similarity=0.3,  # Мягкий порог
+                    extracted_category=category_hint,
                 )
 
                 if not search_results:

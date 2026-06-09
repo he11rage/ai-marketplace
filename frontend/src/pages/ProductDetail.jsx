@@ -68,8 +68,8 @@ export default function ProductDetail() {
   const productCategoryId = typeof product?.category === 'object'
     ? product.category?.id
     : product?.category;
-
   const RELATED_PRODUCTS_PREVIEW_LIMIT = 4;
+
   const { data: relatedProducts = [], isLoading: isRelatedLoading } = useQuery({
     queryKey: ['similar-products', id],
     queryFn: () =>
@@ -78,22 +78,19 @@ export default function ProductDetail() {
         .then((res) => res.data || []),
     enabled: Boolean(id),
   });
+
   const visibleRelatedProducts = relatedProducts.slice(0, RELATED_PRODUCTS_PREVIEW_LIMIT);
   const hasMoreRelatedProducts = relatedProducts.length > RELATED_PRODUCTS_PREVIEW_LIMIT;
 
-  // Check whether product already exists in cart.
   const cartItem = cartItems.find(item => item.id === product?.id);
   const isInCart = !!cartItem;
   const cartQuantity = cartItem?.quantity || 0;
 
   const handleAddToCart = () => {
     if (!product) return;
-    
     if (isInCart) {
-      // If already in cart, open cart page.
       navigate('/cart');
     } else {
-      // Add product with selected quantity.
       addToCart({ ...product, quantity });
     }
   };
@@ -164,10 +161,9 @@ export default function ProductDetail() {
     </div>
   );
 
-  const discount = product.old_price 
-    ? Math.round(((product.old_price - product.price) / product.old_price) * 100) 
+  const discount = product.old_price
+    ? Math.round(((product.old_price - product.price) / product.old_price) * 100)
     : 0;
-
   const inWishlist = isInWishlist(product.id);
   const categoryName = product.category_name || product.category?.name || '';
   const productRatingValue = Number(product.rating ?? 0) || 0;
@@ -199,39 +195,85 @@ export default function ProductDetail() {
       </div>
 
       <div className="flex gap-8">
-        {/* Image gallery */}
-        <div className="flex-1 space-y-4">
-          <div className="h-[500px] bg-white rounded-2xl shadow-subtle overflow-hidden">
-            {product.image ? (
-              <img 
-                src={product.image} 
-                alt={product.name} 
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-[#f0f4ff] to-[#e8f0ff] flex items-center justify-center text-text-secondary">
-                <div className="text-center">
-                  <svg className="w-24 h-24 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <p className="text-lg">Нет фото</p>
+        {/* Left column: Image + Description + Specs */}
+        <div className="flex-1 space-y-6">
+          {/* Image gallery */}
+          <div className="space-y-4">
+            <div className="min-h-[500px] bg-white rounded-2xl shadow-subtle overflow-hidden flex items-center justify-center">
+              {product.image ? (
+                <img
+                  src={product.image}
+                  alt={product.name}
+                  className="max-w-full max-h-[600px] object-contain p-4"
+                />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-[#f0f4ff] to-[#e8f0ff] flex items-center justify-center text-text-secondary">
+                  <div className="text-center">
+                    <svg className="w-24 h-24 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-lg">Нет фото</p>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-          
-          {/* Thumbnail placeholders */}
-          <div className="grid grid-cols-4 gap-3">
-            <div className="h-24 bg-white rounded-xl shadow-subtle cursor-pointer ring-2 ring-[#007AFF] overflow-hidden">
-              {product.image && <img src={product.image} alt="" className="w-full h-full object-cover" />}
+              )}
             </div>
-            <div className="h-24 bg-[#F2F2F7] rounded-xl"></div>
-            <div className="h-24 bg-[#F2F2F7] rounded-xl"></div>
-            <div className="h-24 bg-[#F2F2F7] rounded-xl"></div>
+            
+            {/* Thumbnail placeholders */}
+            <div className="grid grid-cols-4 gap-3">
+              <div className="h-24 bg-white rounded-xl shadow-subtle cursor-pointer ring-2 ring-[#007AFF] overflow-hidden">
+                {product.image && <img src={product.image} alt="" className="w-full h-full object-cover" />}
+              </div>
+              <div className="h-24 bg-[#F2F2F7] rounded-xl"></div>
+              <div className="h-24 bg-[#F2F2F7] rounded-xl"></div>
+              <div className="h-24 bg-[#F2F2F7] rounded-xl"></div>
+            </div>
+          </div>
+
+          {/* Description block */}
+          {product.description && (
+            <div className="bg-white rounded-2xl shadow-subtle p-6">
+              <h2 className="text-xl font-bold mb-4">Описание</h2>
+              <p className="text-text-secondary leading-relaxed whitespace-pre-wrap">
+                {product.description}
+              </p>
+            </div>
+          )}
+
+          {/* Specifications */}
+          <div className="bg-white rounded-2xl shadow-subtle p-6">
+            <h2 className="text-xl font-bold mb-4">Характеристики</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex justify-between py-3 border-b border-[#F2F2F7]">
+                <span className="text-text-secondary">Категория</span>
+                <span className="font-medium">{categoryName  || '—'}</span>
+              </div>
+              <div className="flex justify-between py-3 border-b border-[#F2F2F7]">
+                <span className="text-text-secondary">Артикул</span>
+                <span className="font-medium">{product.sku || `PRD-${product.id}`}</span>
+              </div>
+              <div className="flex justify-between py-3 border-b border-[#F2F2F7]">
+                <span className="text-text-secondary">Бренд</span>
+                <span className="font-medium">{product.brand || '—'}</span>
+              </div>
+              <div className="flex justify-between py-3 border-b border-[#F2F2F7]">
+                <span className="text-text-secondary">Наличие</span>
+                <span className="font-medium text-[#34C759]">
+                  {product.stock_quantity > 0 ? `${product.stock_quantity} шт.` : 'Нет в наличии'}
+                </span>
+              </div>
+              <div className="flex justify-between py-3 border-b border-[#F2F2F7]">
+                <span className="text-text-secondary">Рейтинг</span>
+                <span className="font-medium">{displayedRatingText} / 5.0</span>
+              </div>
+              <div className="flex justify-between py-3 border-b border-[#F2F2F7]">
+                <span className="text-text-secondary">Отзывов</span>
+                <span className="font-medium">{productReviewCount}</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Product details */}
+        {/* Right column: Purchase block */}
         <div className="w-[450px]">
           <div className="bg-white rounded-2xl shadow-subtle p-6 sticky top-24 space-y-6">
             {/* Category and badges */}
@@ -271,7 +313,7 @@ export default function ProductDetail() {
             </div>
 
             {/* Price */}
-            <div className="flex items-baseline gap-3">
+            <div className="flex items-baseline gap-3 pt-2 border-t border-[#F2F2F7]">
               <span className="text-4xl font-bold text-[#007AFF]">
                 {parseFloat(product.price).toFixed(2)}₽
               </span>
@@ -282,24 +324,14 @@ export default function ProductDetail() {
               )}
             </div>
 
-            {/* Description */}
-            {product.description && (
-              <div className="border-t border-[#F2F2F7] pt-4">
-                <h3 className="font-semibold mb-2">Описание</h3>
-                <p className="text-sm text-text-secondary leading-relaxed">
-                  {product.description}
-                </p>
-              </div>
-            )}
-
             {/* Quantity selector */}
-            <div className="border-t border-[#F2F2F7] pt-4">
+            <div className="pt-2">
               <label className="block text-sm font-medium text-text-secondary mb-3">
                 Количество
               </label>
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-3 bg-[#F2F2F7] rounded-xl p-1">
-                  <button 
+                  <button
                     onClick={() => handleQuantityChange(-1)}
                     disabled={quantity <= 1}
                     className="w-10 h-10 rounded-lg bg-white shadow-sm flex items-center justify-center font-bold text-lg hover:bg-[#E5E5EA] transition disabled:opacity-50 disabled:cursor-not-allowed"
@@ -307,7 +339,7 @@ export default function ProductDetail() {
                     −
                   </button>
                   <span className="w-12 text-center font-semibold text-lg">{quantity}</span>
-                  <button 
+                  <button
                     onClick={() => handleQuantityChange(1)}
                     disabled={quantity >= (product.stock_quantity || 999)}
                     className="w-10 h-10 rounded-lg bg-white shadow-sm flex items-center justify-center font-bold text-lg hover:bg-[#E5E5EA] transition disabled:opacity-50 disabled:cursor-not-allowed"
@@ -354,7 +386,6 @@ export default function ProductDetail() {
                   </>
                 )}
               </button>
-              
               <button
                 onClick={() => toggleWishlist(product)}
                 className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center transition-all duration-200 ${
@@ -375,12 +406,6 @@ export default function ProductDetail() {
                 <span className="text-text-secondary">Артикул:</span>
                 <span className="font-medium">{product.sku || `PRD-${product.id}`}</span>
               </div>
-              {product.brand && (
-                <div className="flex justify-between">
-                  <span className="text-text-secondary">Бренд:</span>
-                  <span className="font-medium">{product.brand}</span>
-                </div>
-              )}
               <div className="flex justify-between">
                 <span className="text-text-secondary">Доставка:</span>
                 <span className="font-medium text-[#34C759]">Бесплатно от 50₽</span>
@@ -425,29 +450,6 @@ export default function ProductDetail() {
         </div>
       </div>
 
-      {/* Specifications */}
-      <div className="mt-12 bg-white rounded-2xl shadow-subtle p-8">
-        <h2 className="text-xl font-bold mb-6">Характеристики</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex justify-between py-3 border-b border-[#F2F2F7]">
-            <span className="text-text-secondary">Категория</span>
-            <span className="font-medium">{product.category?.name || '—'}</span>
-          </div>
-          <div className="flex justify-between py-3 border-b border-[#F2F2F7]">
-            <span className="text-text-secondary">Наличие</span>
-            <span className="font-medium text-[#34C759]">В наличии</span>
-          </div>
-          <div className="flex justify-between py-3 border-b border-[#F2F2F7]">
-            <span className="text-text-secondary">Рейтинг</span>
-            <span className="font-medium">{displayedRatingText} / 5.0</span>
-          </div>
-          <div className="flex justify-between py-3 border-b border-[#F2F2F7]">
-            <span className="text-text-secondary">Отзывов</span>
-            <span className="font-medium">{productReviewCount}</span>
-          </div>
-        </div>
-      </div>
-
       <ProductQuestions
         productId={id}
         storeId={typeof product?.store === 'object' ? product.store?.id : product?.store}
@@ -463,7 +465,6 @@ export default function ProductDetail() {
             </span> · {productReviewCount} шт.
           </div>
         </div>
-
         <div className="mb-6 flex items-center justify-end">
           <button
             type="button"
@@ -473,7 +474,6 @@ export default function ProductDetail() {
             Пожаловаться на товар
           </button>
         </div>
-
         <div className="border border-[#F2F2F7] rounded-2xl p-5 mb-8">
           <h3 className="font-semibold mb-4">Оставить отзыв</h3>
           {reviewError && (
@@ -482,33 +482,30 @@ export default function ProductDetail() {
           {reviewSuccess && (
             <div className="mb-4 text-sm text-[#34C759]">{reviewSuccess}</div>
           )}
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label className="block">
               <div className="text-sm font-medium text-text-secondary mb-2">Оценка</div>
               <select
                 value={reviewRating}
-                onChange={(e) => setReviewRating(e.target.value)}
-                className="w-full bg-[#F2F2F7] rounded-xl px-4 py-3 outline-none"
+                onChange={(e) => setReviewRating(Number(e.target.value))}
+                className="w-full bg-[#F2F2F7] rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#007AFF]/20"
               >
                 {[5, 4, 3, 2, 1].map((v) => (
                   <option key={v} value={v}>{v}</option>
                 ))}
               </select>
             </label>
-
             <label className="block md:col-span-2">
               <div className="text-sm font-medium text-text-secondary mb-2">Текст</div>
               <textarea
                 value={reviewText}
                 onChange={(e) => setReviewText(e.target.value)}
                 rows={4}
-                className="w-full bg-[#F2F2F7] rounded-xl px-4 py-3 outline-none resize-none"
+                className="w-full bg-[#F2F2F7] rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#007AFF]/20 resize-none"
                 placeholder="Напишите впечатления о товаре"
               />
             </label>
           </div>
-
           <div className="mt-4">
             <Button onClick={handleSubmitReview}>Отправить</Button>
             <div className="mt-2 text-xs text-text-secondary">
@@ -516,11 +513,10 @@ export default function ProductDetail() {
             </div>
           </div>
         </div>
-
         {isReviewsLoading ? (
-          <div className="text-text-secondary">Загрузка отзывов…</div>
+          <div className="text-text-secondary text-center py-8">Загрузка отзывов…</div>
         ) : reviews.length === 0 ? (
-          <div className="text-text-secondary">Пока нет отзывов.</div>
+          <div className="text-text-secondary text-center py-8 bg-[#F9FAFB] rounded-xl">Пока нет отзывов.</div>
         ) : (
           <div className="space-y-4">
             {reviews.map((r) => (
@@ -566,7 +562,7 @@ export default function ProductDetail() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
           <button
             type="button"
-            className="absolute inset-0 bg-black/30"
+            className="absolute inset-0 bg-black/30 backdrop-blur-sm"
             onClick={() => {
               setReportTarget(null);
               setReportError('');
@@ -574,7 +570,7 @@ export default function ProductDetail() {
             }}
             aria-label="Закрыть"
           />
-          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden">
+          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#F2F2F7]">
               <div className="text-lg font-bold">Жалоба</div>
               <button
@@ -591,13 +587,12 @@ export default function ProductDetail() {
             <div className="p-6 space-y-4">
               {reportError && <div className="text-sm text-[#FF3B30]">{reportError}</div>}
               {reportSuccess && <div className="text-sm text-[#34C759]">{reportSuccess}</div>}
-
               <label className="block">
                 <div className="text-sm font-medium text-text-secondary mb-2">Причина</div>
                 <select
                   value={reportReason}
                   onChange={(e) => setReportReason(e.target.value)}
-                  className="w-full bg-[#F2F2F7] rounded-xl px-4 py-3 outline-none"
+                  className="w-full bg-[#F2F2F7] rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#007AFF]/20"
                 >
                   {[
                     'Спам/мошенничество',
@@ -610,28 +605,21 @@ export default function ProductDetail() {
                   ))}
                 </select>
               </label>
-
               <label className="block">
                 <div className="text-sm font-medium text-text-secondary mb-2">Комментарий</div>
                 <textarea
                   value={reportDescription}
                   onChange={(e) => setReportDescription(e.target.value)}
                   rows={4}
-                  className="w-full bg-[#F2F2F7] rounded-xl px-4 py-3 outline-none resize-none"
+                  className="w-full bg-[#F2F2F7] rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#007AFF]/20 resize-none"
                   placeholder="Опишите, что именно не так"
                 />
               </label>
-
-              <div className="flex justify-end gap-3">
-                <Button
-                  variant="secondary"
-                  onClick={() => setReportTarget(null)}
-                >
-                  Отмена
-                </Button>
+              <div className="flex justify-end gap-3 pt-2">
+                <Button variant="secondary" onClick={() => setReportTarget(null)}>Отмена</Button>
                 <Button onClick={handleSubmitReport}>Отправить</Button>
               </div>
-              <div className="text-xs text-text-secondary">
+              <div className="text-xs text-text-secondary text-center">
                 Жалобы видны модераторам. Статус рассмотрения можно будет увидеть в будущем в личном кабинете.
               </div>
             </div>
@@ -643,28 +631,28 @@ export default function ProductDetail() {
       <div className="mt-12">
         <h2 className="text-xl font-bold mb-6">Похожие товары</h2>
         {isRelatedLoading ? (
-          <div className="grid grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[1, 2, 3, 4].map((item) => (
-              <div key={item} className="bg-white rounded-2xl shadow-subtle p-4">
-                <div className="h-40 bg-[#F2F2F7] rounded-xl mb-3"></div>
+              <div key={item} className="bg-white rounded-2xl shadow-subtle p-4 animate-pulse">
+                <div className="aspect-square bg-[#F2F2F7] rounded-xl mb-3"></div>
                 <div className="h-4 bg-[#F2F2F7] rounded w-3/4 mb-2"></div>
                 <div className="h-4 bg-[#F2F2F7] rounded w-1/2"></div>
               </div>
             ))}
           </div>
         ) : relatedProducts.length === 0 ? (
-          <div className="text-text-secondary bg-white rounded-2xl shadow-subtle p-6">
+          <div className="text-text-secondary bg-white rounded-2xl shadow-subtle p-8 text-center">
             Похожего товара не найдено.
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {visibleRelatedProducts.map((relatedProduct) => (
                 <ProductCard key={relatedProduct.id} product={relatedProduct} />
               ))}
             </div>
             {hasMoreRelatedProducts && (
-              <div className="mt-6 flex justify-center">
+              <div className="mt-8 flex justify-center">
                 <Button
                   variant="secondary"
                   onClick={() => navigate(`/catalog?category=${productCategoryId}`)}

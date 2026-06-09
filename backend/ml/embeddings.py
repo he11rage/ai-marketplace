@@ -4,26 +4,29 @@ from transformers import AutoTokenizer, AutoModel
 
 _model = None
 _tokenizer = None
+_device = None
 
 def _get_model():
     """Загружает модель один раз и возвращает её из кэша"""
-    global _model, _tokenizer
+    global _model, _tokenizer, _device
     if _model is None:
-        print("Loading ru-en-RoSBERTa...")
+        print("🤖 [STARTUP] Loading ru-en-RoSBERTa into memory...")
         _tokenizer = AutoTokenizer.from_pretrained("ai-forever/ru-en-RoSBERTa")
         _model = AutoModel.from_pretrained("ai-forever/ru-en-RoSBERTa")
         _model.eval()
+        
         # Автоматически определяем устройство (GPU если есть, иначе CPU)
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        _model.to(device)
-    return _tokenizer, _model
+        _device = "cuda" if torch.cuda.is_available() else "cpu"
+        _model.to(_device)
+        print(f"[STARTUP] Model successfully loaded on device: {_device}")
+        
+    return _tokenizer, _model, _device
 
 def get_embedding(text: str) -> list[float]:
     """
     Превращает текст в вектор из 1024 чисел с использованием Masked Mean Pooling.
     """
-    tokenizer, model = _get_model()
-    device = next(model.parameters()).device
+    tokenizer, model, device = _get_model()
     
     inputs = tokenizer(
         text, 
@@ -39,7 +42,7 @@ def get_embedding(text: str) -> list[float]:
     with torch.no_grad():
         outputs = model(**inputs)
 
-    # --- ИСПРАВЛЕНИЕ: Masked Mean Pooling ---
+    # --- Masked Mean Pooling ---
     attention_mask = inputs["attention_mask"]
     # Расширяем маску до размерности эмбеддингов (batch_size, seq_len, hidden_dim)
     mask_expanded = attention_mask.unsqueeze(-1).expand(outputs.last_hidden_state.size()).float()

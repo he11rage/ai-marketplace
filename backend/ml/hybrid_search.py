@@ -1,10 +1,14 @@
 """
-Гибридный поиск товаров: full-text (PostgreSQL tsvector / ts_rank) + векторный (embeddings).
+Гибридный поиск товаров: full-text (PostgreSQL tsvector / ts_rank) + векторный (embeddings)
+с поддержкой мягкой фильтрации по динамическим категориям.
 """
 from django.contrib.postgres.search import SearchQuery, SearchRank
 from django.db.models import F, FloatField, Q
 from django.db.models.functions import Coalesce
 from pgvector.django import CosineDistance
+
+# Автоматический импорт вашей модели категорий на основе структуры проекта
+from api.products.models import Category
 
 from ml.config import (
     HYBRID_SEARCH_CATALOG_MIN_VECTOR_SIMILARITY,
@@ -16,10 +20,44 @@ from ml.config import (
 from ml.embeddings import get_embedding
 
 
+def get_matching_category_ids(extracted_category_name: str) -> list[int]:
+    """
+    Разбивает извлеченную ЛЛМ категорию на ключевые слова и ищет совпадения 
+    в названиях динамических категорий в БД. Выводит подробные логи в консоль.
+    """
+    if not extracted_category_name:
+        return []
+        
+    # Разбиваем на слова, очищаем от пробелов и убираем слишком короткие предлоги
+    words = [w.strip().lower() for w in extracted_category_name.split() if len(w.strip()) > 2]
+    
+    if not words:
+        words = [extracted_category_name.lower()]
+
+    # Строим динамический OR-запрос по ключевым словам
+    category_filter = Q()
+    for word in words:
+        category_filter |= Q(name__icontains=word)
+        
+    # Запрос к БД для получения совпадений
+    matched_categories = Category.objects.filter(category_filter)
+    matched_ids = list(matched_categories.values_list('id', flat=True))
+    
+    # Красивое логирование результатов в консоль контейнера
+    if matched_ids:
+        names_list = ", ".join([f"'{c.name}' (ID: {c.id})" for c in matched_categories])
+        print(f"🎯 [CATEGORY MATCH] ЛЛМ запросила: '{extracted_category_name}'. Найдено совпадений в БД: {names_list}", flush=True)
+    else:
+        print(f"⚠️ [CATEGORY MISMATCH] ЛЛМ запросила: '{extracted_category_name}'. В БД нет похожих категорий. Поиск пойдет по всему каталогу.", flush=True)
+        
+    return matched_ids
+
+
 def hybrid_search_products(
     queryset,
     query: str,
     *,
+    extracted_category: str | None = None,  # Получаем категорию напрямую из анализа ЛЛМ
     text_weight: float | None = None,
     vector_weight: float | None = None,
     min_vector_similarity: float | None = None,
@@ -28,11 +66,18 @@ def hybrid_search_products(
     """
     Фильтрует queryset по гибридному скору и добавляет аннотации:
     text_rank, vector_similarity, hybrid_score.
-
-    text_rank — релевантность full-text (ts_rank, аналог BM25 в PostgreSQL).
-    vector_similarity — 1 - cosine_distance между embedding товара и запроса.
-    hybrid_score — взвешенная сумма двух сигналов.
+    
+    При передаче extracted_category выполняет мягкое сужение выборки 
+    по динамическим категориям бэкенда.
     """
+    # 1. Мягкая динамическая фильтрация по категориям
+    if extracted_category:
+        category_ids = get_matching_category_ids(extracted_category)
+        if category_ids:
+            # Фильтруем товары, сужая поиск до найденных динамических категорий
+            # (убедитесь, что связь в модели Product называется category_id)
+            queryset = queryset.filter(category_id__in=category_ids)
+
     query = (query or "").strip()
     if not query:
         return queryset

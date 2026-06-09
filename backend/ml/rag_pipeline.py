@@ -35,6 +35,7 @@ def search_products_for_chat(
     limit: int = CHAT_SEARCH_LIMIT,
     min_vector_similarity: float = CHAT_MIN_VECTOR_SIMILARITY,
     base_queryset=None,
+    extracted_category: str | None = None
 ):
     """Поиск для AI-чата с оценками релевантности и пре-фильтром."""
     if base_queryset is None:
@@ -48,6 +49,7 @@ def search_products_for_chat(
     qs = hybrid_search_products(
         base_queryset,
         query,
+        extracted_category=extracted_category,
         min_vector_similarity=min_vector_similarity,
         apply_ordering=True,
     )
